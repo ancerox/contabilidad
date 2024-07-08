@@ -1,9 +1,10 @@
 import 'dart:convert';
 
 import 'package:contabilidad/models/date_range.dart';
+import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 
-class ProductModel {
+class ProductModel extends Equatable {
   final int? id;
   final String name;
   final String? file;
@@ -67,41 +68,24 @@ class ProductModel {
   }
 
   @override
-  bool operator ==(Object other) {
-    return other is ProductModel &&
-        other.id == id &&
-        other.name == name &&
-        other.file == file &&
-        other.amount == amount &&
-        other.unitPrice == unitPrice &&
-        other.productCategory == productCategory &&
-        other.cost == cost &&
-        other.unit == unit &&
-        other.productType == productType &&
-        other.quantity?.value == quantity?.value &&
-        listEquals(other.subProduct, subProduct) &&
-        listEquals(other.datesNotAvailable, datesNotAvailable) &&
-        listEquals(other.datesUsed, datesUsed);
-  }
+  List<Object?> get props => [
+        id,
+        name,
+        file,
+        amount,
+        unitPrice,
+        productCategory,
+        cost,
+        unit,
+        productType,
+        quantity?.value,
+        subProduct,
+        datesNotAvailable,
+        datesUsed,
+      ];
 
   @override
-  int get hashCode {
-    return Object.hash(
-      id,
-      name,
-      file,
-      amount,
-      unitPrice,
-      productCategory,
-      cost,
-      unit,
-      productType,
-      quantity?.value,
-      Object.hashAll(subProduct ?? []),
-      Object.hashAll(datesNotAvailable ?? []),
-      Object.hashAll(datesUsed ?? []),
-    );
-  }
+  bool get stringify => true;
 
   Map<String, dynamic> toMap() {
     return {

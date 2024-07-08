@@ -4,6 +4,7 @@ import 'package:contabilidad/pages/create_charge_screen.dart';
 import 'package:contabilidad/pages/create_order.dart';
 import 'package:contabilidad/pages/history.dart';
 import 'package:contabilidad/pages/pending_screen.dart';
+import 'package:contabilidad/pages/save_data_page.dart';
 import 'package:contabilidad/pages/stock_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
@@ -17,10 +18,41 @@ class HomePage extends StatelessWidget {
     'assets/icons/cobro.svg'
   ];
   final listOfActionsTexts = ['Compra', 'Orden', 'Cobro'];
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: <Widget>[
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
+              child: Text(
+                'Configuracion',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const BackupPage()));
+              },
+              child: const ListTile(
+                leading: Icon(Icons.settings),
+                title: Text('Datos'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      key: _scaffoldKey,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -33,7 +65,12 @@ class HomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SvgPicture.asset('assets/icons/ep_menu.svg'),
+                    GestureDetector(
+                      onTap: () {
+                        _scaffoldKey.currentState?.openDrawer();
+                      },
+                      child: SvgPicture.asset('assets/icons/ep_menu.svg'),
+                    ),
                     const SizedBox(height: 40),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,

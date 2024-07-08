@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class ReceiptPage extends StatefulWidget {
-  final Map<ProductModel, int> selectedProducts;
+  final List<ProductModel> selectedProducts;
 
   const ReceiptPage({super.key, required this.selectedProducts});
 
@@ -20,49 +20,21 @@ class _ReceiptPageState extends State<ReceiptPage> {
   @override
   void initState() {
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
-    // TODO: implement initState
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
-    double totalCost = widget.selectedProducts.entries.fold(
+    double totalCost = widget.selectedProducts.fold(
         0,
-        (previousValue, entry) =>
-            previousValue + (entry.key.cost * entry.value));
-
-    // Group products by ID to sum quantities of duplicates
-    final Map<int, ProductModel> productsById = {};
-    final Map<int, int> quantitiesById = {};
-
-    for (var entry in widget.selectedProducts.entries) {
-      final product = entry.key;
-      final quantity = entry.value;
-
-      if (productsById.containsKey(product.id)) {
-        quantitiesById[product.id!] =
-            (quantitiesById[product.id] ?? 0) + quantity;
-      } else {
-        productsById[product.id!] = product;
-        quantitiesById[product.id!] = quantity;
-      }
-    }
-
-    List<MapEntry<ProductModel, int>> consolidatedProductEntries = productsById
-        .entries
-        .map((entry) => MapEntry(entry.value, quantitiesById[entry.key]!))
-        .toList();
-
-    List<ProductModel> consolidatedProducts =
-        consolidatedProductEntries.map((entry) {
-      return entry.key..quantity!.value = entry.value;
-    }).toList();
+        (previousValue, product) =>
+            previousValue + (product.cost * product.quantity!.value));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recibo de Compra',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.deepPurple, // Adds a custom color to the AppBar
+        backgroundColor: Colors.deepPurple,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -73,24 +45,20 @@ class _ReceiptPageState extends State<ReceiptPage> {
             children: <Widget>[
               const ListTile(
                 leading: Icon(Icons.receipt_long,
-                    size: 50,
-                    color: Colors.deepPurple), // Custom color for the icon
+                    size: 50, color: Colors.deepPurple),
                 title: Text('Productos Comprados',
                     style: TextStyle(fontWeight: FontWeight.bold)),
               ),
               const Divider(),
               Expanded(
                 child: ListView.builder(
-                  itemCount: consolidatedProductEntries.length,
+                  itemCount: widget.selectedProducts.length,
                   itemBuilder: (BuildContext context, int index) {
-                    final productEntry = consolidatedProductEntries[index];
-                    final product = productEntry.key;
-                    final quantity = productEntry.value;
+                    final product = widget.selectedProducts[index];
+                    final quantity = product.quantity!.value;
                     return ListTile(
                       title: Text(product.name,
-                          style: const TextStyle(
-                              fontWeight:
-                                  FontWeight.bold)), // Bold for product names
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(
                           'Cantidad: $quantity\nPrecio por unidad: \$${product.cost.toStringAsFixed(2)}'),
                     );
@@ -118,8 +86,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
                         style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors
-                                .deepPurple)), // Custom style for total cost
+                            color: Colors.deepPurple)),
                     Text('\$${totalCost.toStringAsFixed(2)}',
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
@@ -130,8 +97,8 @@ class _ReceiptPageState extends State<ReceiptPage> {
                 padding: const EdgeInsets.all(16.0),
                 child: ElevatedButton(
                   onPressed: () async {
-                    await updateMultipleProducts(
-                        context, conceptoController.text, consolidatedProducts);
+                    await updateMultipleProducts(context,
+                        conceptoController.text, widget.selectedProducts);
 
                     final snackBar = SnackBar(
                       content: const Text(
@@ -142,38 +109,28 @@ class _ReceiptPageState extends State<ReceiptPage> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      backgroundColor:
-                          Colors.deepPurple, // Un color de fondo llamativo
-                      duration: const Duration(
-                          seconds: 3), // Duración que el SnackBar será mostrado
+                      backgroundColor: Colors.deepPurple,
+                      duration: const Duration(seconds: 3),
                       action: SnackBarAction(
                         label: 'Deshacer',
-                        textColor:
-                            Colors.amber, // Color llamativo para la acción
+                        textColor: Colors.amber,
                         onPressed: () {
                           // Código para deshacer la acción aquí
                         },
                       ),
-                      behavior: SnackBarBehavior
-                          .floating, // Hace que el SnackBar "flote" sobre la UI
+                      behavior: SnackBarBehavior.floating,
                       shape: RoundedRectangleBorder(
-                        // Forma personalizada
-                        borderRadius:
-                            BorderRadius.circular(20.0), // Bordes redondeados
+                        borderRadius: BorderRadius.circular(20.0),
                       ),
-                      margin: const EdgeInsets.all(
-                          10), // Margen alrededor del SnackBar
+                      margin: const EdgeInsets.all(10),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 24.0,
-                          vertical: 12.0), // Ajusta el padding interno
+                          horizontal: 24.0, vertical: 12.0),
                     );
 
-                    // Muestra el SnackBar
                     ScaffoldMessenger.of(context).showSnackBar(snackBar);
                   },
                   style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          Colors.deepPurple), // Custom button color
+                      backgroundColor: Colors.deepPurple),
                   child: const Text('Aceptar',
                       style: TextStyle(color: Colors.white)),
                 ),
@@ -204,23 +161,23 @@ class _ReceiptPageState extends State<ReceiptPage> {
     OrderModel order = OrderModel(
       pagos: [],
       orderNumber: "",
-      clientName: concepto, // Llena con los datos apropiados
-      celNumber: '', // Llena con los datos apropiados
-      direccion: '', // Llena con los datos apropiados
+      clientName: concepto,
+      celNumber: '',
+      direccion: '',
       date: DateTime.now().toString(),
       comment: "",
       totalCost: consolidatedProducts.fold(
           0, (sum, item) => sum + (item.cost * item.quantity!.value)),
       status: 'Compra',
-      margen: '', // Llena con los datos apropiados
-      totalOwned: '', // Llena con los datos apropiados
+      margen: '',
+      totalOwned: '',
     );
 
     await dataBase.createOrderWithProducts(order, consolidatedProducts);
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => HomePage()),
-      (Route<dynamic> route) => false, // Elimina todas las rutas anteriores
+      (Route<dynamic> route) => false,
     );
   }
 }

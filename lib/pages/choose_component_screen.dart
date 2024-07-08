@@ -130,8 +130,8 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                               var products = snap.data ?? [];
 
                               products = sortedComoditiesList;
-                              List<ProductModel> listProducts =
-                                  dabataseProvider.selectedCommodities.value;
+                              // List<ProductModel> listProducts =
+
                               if (dabataseProvider
                                   .selectedCommodities.value.isNotEmpty) {
                                 // Set<ProductModel> resultSet =
@@ -143,14 +143,16 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                   for (var item in products) item: item
                                 };
 
-                                for (var item in listProducts) {
+                                for (var item in dabataseProvider
+                                    .selectedCommodities.value) {
                                   map[item] =
                                       item; // This replaces if the item already exists, adds if it doesn't
                                 }
                                 List<ProductModel> mixedList =
                                     map.values.toList();
                                 products = mixedList;
-                                componetsProducts = listProducts;
+                                componetsProducts =
+                                    dabataseProvider.selectedCommodities.value;
                               }
                               products = products.where((product) {
                                 return product.name
@@ -215,7 +217,9 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                                   }
                                                   if (product.quantity!.value ==
                                                       1) {
-                                                    listProducts
+                                                    dabataseProvider
+                                                        .selectedCommodities
+                                                        .value
                                                         .remove(product);
                                                   }
                                                   product.quantity!.value--;
@@ -341,7 +345,10 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                                     if (product
                                                             .quantity!.value ==
                                                         0) {
-                                                      listProducts.add(product);
+                                                      dabataseProvider
+                                                          .selectedCommodities
+                                                          .value
+                                                          .add(product);
                                                       product.quantity!.value++;
                                                       hasPurchases = products
                                                           .any((product) =>
@@ -351,9 +358,13 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                                       return;
                                                     }
 
-                                                    if (listProducts
+                                                    if (dabataseProvider
+                                                        .selectedCommodities
+                                                        .value
                                                         .isNotEmpty) {
-                                                      listProducts[index]
+                                                      dabataseProvider
+                                                          .selectedCommodities
+                                                          .value[index]
                                                           .quantity!
                                                           .value++;
                                                       hasPurchases = products
@@ -371,7 +382,7 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                                             product.quantity!
                                                                 .value >
                                                             0);
-
+                                                    setState(() {});
                                                     // int currentValue = int.tryParse(
                                                     //         quantityController.text) ??
                                                     //     0;

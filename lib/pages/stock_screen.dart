@@ -238,6 +238,7 @@ class _StockScreenState extends State<StockScreen> {
                     itemCount: productList.length,
                     itemBuilder: (context, index) {
                       var product = productList[index];
+                      calculateStockInUse(product);
 
                       return Slidable(
                         key: Key(product.id.toString()),
@@ -354,7 +355,7 @@ class _StockScreenState extends State<StockScreen> {
                                                         isCurrentDateOutsideRanges(
                                                                 product
                                                                     .datesNotAvailable!)
-                                                            ? 'Disponible hoy'
+                                                            ? '${calculateStockInUse(product)} Disponible hoy'
                                                             : "No disponible hasta ${DateFormat('EEEE d MMMM', 'es_ES').format(product.datesNotAvailable![0].end!)}",
                                                         overflow: TextOverflow
                                                             .ellipsis,
@@ -415,6 +416,25 @@ class _StockScreenState extends State<StockScreen> {
         ),
       ),
     );
+  }
+
+  bool isDateInRange(DateTime date, DateTime start, DateTime end) {
+    return date.isAfter(start) && date.isBefore(end) ||
+        date.isAtSameMomentAs(start) ||
+        date.isAtSameMomentAs(end);
+  }
+
+  int calculateStockInUse(ProductModel productModel) {
+    if (productModel.datesUsed != null) {
+      final now = DateTime.now();
+      final totalBorrowed = productModel.datesUsed!
+          .where((element) => isDateInRange(now, element.start!, element.end!))
+          .fold<int>(0, (sum, element) => sum + (element.borrowQuantity ?? 0));
+
+      final availableStock = productModel.amount - totalBorrowed;
+      return availableStock;
+    }
+    return productModel.amount;
   }
 
   bool isCurrentDateOutsideRanges(List<DateRange> dateRanges) {

@@ -6,9 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class PaymentScreen extends StatefulWidget {
-  const PaymentScreen({
-    super.key,
-  });
+  const PaymentScreen({super.key});
 
   @override
   _PaymentScreenState createState() => _PaymentScreenState();
@@ -25,7 +23,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Map<int, ValueNotifier<int>> productQuantities = {};
   ValueNotifier<bool> isCheckoutButtonEnabled = ValueNotifier(false);
-  Map<ProductModel, int> selectedProducts = {};
+  List<ProductModel> selectedProducts = [];
   final TextEditingController costCTRController = TextEditingController();
   final TextEditingController quantityCTRController = TextEditingController();
 
@@ -39,10 +37,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   void _updateCheckoutButtonState() {
     isCheckoutButtonEnabled.value =
-        selectedProducts.values.any((quantity) => quantity > 0);
-    final totalQuantity = productQuantities.values
-        .fold(0, (int sum, notifier) => sum + notifier.value);
-    isCheckoutButtonEnabled.value = totalQuantity > 0;
+        selectedProducts.any((product) => product.quantity!.value > 0);
   }
 
   @override
@@ -69,22 +64,37 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isCheckoutEnabled() {
     int totalQuantity = productQuantities.values
         .fold(0, (sum, notifier) => sum + notifier.value);
-    return totalQuantity > 1;
+    return totalQuantity > 0;
   }
 
   void _updateSelectedProductQuantity(
       ProductModel product, int change, bool isOverwrite) {
-    final currentQuantity = selectedProducts[product] ?? 0;
+    final existingProduct = selectedProducts.firstWhere(
+        (p) => p.id == product.id,
+        orElse: () => ProductModel(
+            id: product.id,
+            name: product.name,
+            cost: product.cost,
+            unit: product.unit,
+            amount: product.amount,
+            unitPrice: product.unitPrice,
+            file: product.file,
+            productCategory: product.productCategory,
+            productType: product.productType,
+            quantity: ValueNotifier<int>(0)));
 
-    int updatedQuantity = currentQuantity + change;
+    int updatedQuantity = existingProduct.quantity!.value + change;
     if (isOverwrite) {
       updatedQuantity = change;
     }
 
     if (updatedQuantity <= 0) {
-      selectedProducts.remove(product);
+      selectedProducts.removeWhere((p) => p.id == product.id);
     } else {
-      selectedProducts[product] = updatedQuantity;
+      existingProduct.quantity!.value = updatedQuantity;
+      if (!selectedProducts.contains(existingProduct)) {
+        selectedProducts.add(existingProduct);
+      }
     }
 
     _updateCheckoutButtonState();
@@ -92,10 +102,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // It seems like you had an accidental FutureBuilder duplication here. I've removed the incorrect one.
     return FutureBuilder<List<ProductModel>>(
-      future: dataBaseProvider
-          .obtenerProductos(), // Make sure databaseProvider is defined and correct
+      future: dataBaseProvider.obtenerProductos(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
           final products = snapshot.data ?? [];
@@ -105,33 +113,26 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             body: products.isEmpty
                 ? Container(
-                    padding: const EdgeInsets.all(
-                        20.0), // Añade padding alrededor del texto
-                    margin: const EdgeInsets.all(
-                        20.0), // Añade margen alrededor del Container
+                    padding: const EdgeInsets.all(20.0),
+                    margin: const EdgeInsets.all(20.0),
                     decoration: BoxDecoration(
-                      color: Colors
-                          .white, // Define el color de fondo del Container
-                      borderRadius: BorderRadius.circular(
-                          20.0), // Define los bordes redondeados
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20.0),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey
-                              .withOpacity(0.5), // Color de la sombra
+                          color: Colors.grey.withOpacity(0.5),
                           spreadRadius: 1,
                           blurRadius: 5,
-                          offset: const Offset(
-                              0, 3), // Cambios de posición de la sombra
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
                     child: const Text(
                       "Aún no has agregado ningún producto a tu inventario",
-                      textAlign:
-                          TextAlign.center, // Centra el texto horizontalmente
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 16.0, // Tamaño del texto
-                        color: Colors.black, // Color del texto
+                        fontSize: 16.0,
+                        color: Colors.black,
                       ),
                     ),
                   )
@@ -157,18 +158,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   products[index].cost.toString();
 
                               passedIndex = index;
-                              // quantityController.text =
-                              //     products[index].amount.toString();
 
-                              // Make sure 'Item' widget is defined or replace it with an appropriate widget
                               return GestureDetector(
                                 onTap: () async {
-                                  // Navigator.push(
-                                  //     context,
-                                  //     MaterialPageRoute(
-                                  //         builder: (_) => CheckoutScreen(
-                                  //               product: products[index],
-                                  //             )));
+                                  // Handle tap
                                 },
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -228,8 +221,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                       Container(
                         margin: const EdgeInsets.all(20),
-                        width: double.infinity, // Ancho del botón
-                        height: 70, // Alto del botón
+                        width: double.infinity,
+                        height: 70,
                         child: ValueListenableBuilder(
                           valueListenable: isCheckoutButtonEnabled,
                           builder: (context, value, child) {
@@ -244,15 +237,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                               ),
                               onPressed: value
                                   ? () {
-                                      Map<int, double> idCostMap = {};
-                                      selectedProducts
-                                          .forEach((product, quantity) {
-                                        idCostMap[product.id!] = product.cost;
-                                      });
-
-                                      dataBaseProvider
-                                          .updateMultipleProductCosts(
-                                              idCostMap);
                                       Navigator.push(
                                           context,
                                           MaterialPageRoute(

@@ -5,8 +5,10 @@ import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
+import 'package:contabilidad/pages/choose_component_screen.dart';
 import 'package:contabilidad/pages/choose_product_screen.dart';
 import 'package:contabilidad/pages/order_created_screen.dart';
+import 'package:contabilidad/widget/alquiler_tile.dart';
 import 'package:contabilidad/widget/item_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -44,7 +46,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final Map<String, TextEditingController> _quantityControllers = {};
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _dateController = TextEditingController();
-
+  String totalOwnedGlobal = '';
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _cellController = TextEditingController();
   final TextEditingController _directionController = TextEditingController();
@@ -53,11 +55,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final TextEditingController _paymentDateController = TextEditingController();
   final TextEditingController _paymentAmountController =
       TextEditingController();
-  Map<ProductModel, List<DateRange>> productDateRanges = {};
-  Map<ProductModel, DateTime?> focusedDays = {};
-  Map<ProductModel, DateTime?> startDays = {};
-  Map<ProductModel, DateTime?> endDays = {};
-  Map<ProductModel, RangeSelectionMode> rangeSelectionModes = {};
+  Map<int, List<DateRange>> productDateRanges = {};
+  Map<int, DateTime?> focusedDays = {};
+  Map<int, DateTime?> startDays = {};
+  Map<int, DateTime?> endDays = {};
+  Map<int, RangeSelectionMode> rangeSelectionModes = {};
   int? _orderNumber;
 
   Map<int, ValueNotifier<int>> productQuantities = {};
@@ -132,7 +134,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     _paymentDateController.dispose();
     _paymentAmountController.dispose();
     _quantityControllers.forEach((_, controller) => controller.dispose());
-    _quantityNotifiers.forEach((_, notifier) => notifier.dispose());
+    // _quantityNotifiers.forEach((_, notifier) => notifier.dispose());
     products.dispose();
     totalPriceNotifier.dispose();
     isCheckoutButtonEnabled.dispose();
@@ -187,7 +189,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       int quantity = product.quantity?.value ?? 0;
 
       // Get the corresponding date ranges for the current product
-      List<DateRange>? dateRanges = productDateRanges[product];
+      List<DateRange>? dateRanges = productDateRanges[product.id];
 
       // Calculate the cost for the product considering its date ranges
       total += calculateCost(product, dateRanges ?? []);
@@ -217,9 +219,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         pagos: pagos,
         productList: listProducts,
         orderNumber: newOrderNumber.toString(),
-        totalOwned: productDateRanges.isNotEmpty
-            ? "${productDateRanges.values.first[0].end!.difference(productDateRanges.values.first[0].start!).inDays + 1 - grantTotalOwned}"
-            : totalOwned.toString(),
+        totalOwned: totalOwnedGlobal,
         margen: margin.toString(),
         status: "pendiente",
         clientName: _nameController.text,
@@ -288,6 +288,24 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     _commnetController.text = widget.order!.comment;
     _totalController.text = widget.order!.totalCost.toString();
 
+    bool hasDatesUsed = widget.order!.productList!.any((product) =>
+        product.datesUsed != null && product.datesUsed!.isNotEmpty);
+
+    if (hasDatesUsed) {
+      setState(() {
+        _selectedOption = 'Alquiler';
+      });
+
+      for (var product in widget.order!.productList!) {
+        if (product.datesUsed != null && product.datesUsed!.isNotEmpty) {
+          productDateRanges[product.id!] = product.datesUsed!;
+          focusedDays[product.id!] = product.datesUsed![0].start;
+          startDays[product.id!] = product.datesUsed![0].start;
+          endDays[product.id!] = product.datesUsed![0].end;
+        }
+      }
+    }
+
     _calculateTotalPrice();
   }
 
@@ -323,10 +341,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   double calculateTotalCostRent(List<ProductModel> selectedProducts,
-      Map<ProductModel, List<DateRange>> productDateRanges) {
+      Map<int, List<DateRange>> productDateRanges) {
     double totalCost = 0.0;
     for (var product in selectedProducts) {
-      totalCost += calculateCost(product, productDateRanges[product] ?? []);
+      totalCost += calculateCost(product, productDateRanges[product.id] ?? []);
     }
     return totalCost;
   }
@@ -354,6 +372,27 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _paymentAmountController.clear();
       });
     }
+  }
+
+  Future<double> calculateTotalRentalPrice(DataBase dataBaseProvider,
+      Map<int, List<DateRange>> productDateRanges) async {
+    double totalRentalPrice = 0.0;
+
+    for (var entry in productDateRanges.entries) {
+      final dateRanges = entry.value;
+      final totalDays = dateRanges.fold<int>(
+        0,
+        (rangeSum, dateRange) =>
+            rangeSum + dateRange.end!.difference(dateRange.start!).inDays + 1,
+      );
+
+      final product = await dataBaseProvider.getProductById(entry.key);
+      if (product != null) {
+        totalRentalPrice += totalDays * product.unitPrice;
+      }
+    }
+
+    return totalRentalPrice;
   }
 
   @override
@@ -467,7 +506,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           children: [
                             if (_selectedOption == 'Alquiler')
                               AlquilerWidget(
-                                dataBaseProvider: dataBaseProvider,
                                 showCalendar: showCalendar,
                                 productDateRanges: productDateRanges,
                                 calculateTotalCost: calculateTotalCostRent,
@@ -486,7 +524,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                       itemBuilder: (context, index) {
                                         final product = selectedProducts[index];
                                         final unitPriceControllers =
-                                            _unitPriceControllers[index] ??
+                                            _unitPriceControllers[product.id] ??
                                                 TextEditingController();
                                         final controller =
                                             _getOrCreateController(
@@ -798,109 +836,118 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           children: [
                             if (_selectedOption == 'Alquiler')
                               AlquilerWidget(
-                                dataBaseProvider: dataBaseProvider,
                                 showCalendar: showCalendar,
                                 productDateRanges: productDateRanges,
                                 calculateTotalCost: calculateTotalCostRent,
                               ),
                             _selectedOption == 'Alquiler'
                                 ? Container()
-                                : Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: const BoxDecoration(
-                                        color:
-                                            Color.fromARGB(255, 225, 225, 225)),
-                                    height: MediaQuery.of(context).size.height *
-                                        0.3,
-                                    child: ListView.builder(
-                                      itemCount: selectedProducts.length,
-                                      itemBuilder: (context, index) {
-                                        final product = selectedProducts[index];
-                                        final unitPriceControllers =
-                                            _unitPriceControllers[index] ??
-                                                TextEditingController();
-                                        final controller =
-                                            _getOrCreateController(
-                                                product.id.toString());
-                                        double unitPrice = double.tryParse(
-                                                product.unitPrice.toString()) ??
-                                            0.0;
-                                        int quantity = product.quantity!.value;
+                                : Column(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: const BoxDecoration(
+                                            color: Color.fromARGB(
+                                                255, 225, 225, 225)),
+                                        height:
+                                            MediaQuery.of(context).size.height *
+                                                0.3,
+                                        child: ListView.builder(
+                                          itemCount: selectedProducts.length,
+                                          itemBuilder: (context, index) {
+                                            final product =
+                                                selectedProducts[index];
+                                            final unitPriceControllers =
+                                                _unitPriceControllers[
+                                                        product.id] ??
+                                                    TextEditingController();
+                                            final controller =
+                                                _getOrCreateController(
+                                                    product.id.toString());
+                                            double unitPrice = double.tryParse(
+                                                    product.unitPrice
+                                                        .toString()) ??
+                                                0.0;
+                                            int quantity =
+                                                product.quantity!.value;
 
-                                        double totalPrice =
-                                            quantity * unitPrice;
-                                        double totalcost =
-                                            product.cost * quantity;
+                                            double totalPrice =
+                                                quantity * unitPrice;
+                                            double totalcost =
+                                                product.cost * quantity;
 
-                                        unitPriceControllers.text =
-                                            totalPrice.toString();
+                                            unitPriceControllers.text =
+                                                totalPrice.toString();
 
-                                        return Item(
-                                          subProducts: product.subProduct,
-                                          costOnChange: (String value) {
-                                            if (value != "") {
-                                              product.cost =
-                                                  double.parse(value);
-                                              _calculateTotalPrice();
-                                            }
-                                          },
-                                          onFieldSubmitted: (String value) {
-                                            setState(() {});
-                                          },
-                                          cost: totalcost,
-                                          imagePath: product.file!,
-                                          name: product.name,
-                                          precio: product.unitPrice,
-                                          quantityOnChange: (String value) {
-                                            if (value == "") {
-                                              return;
-                                            }
-                                            product.quantity!.value =
-                                                int.parse(value);
-                                            _updateCheckoutButtonState();
-                                            _updateSelectedProductQuantity(
-                                                product,
-                                                int.parse(controller.text),
-                                                true);
-                                            totalOwned =
-                                                totalquantity - grantTotalOwned;
-                                            _calculateTotalPrice();
-                                            setState(() {});
-                                          },
-                                          plus: () {
-                                            product.quantity!.value++;
-                                            _updateCheckoutButtonState();
-                                            _updateSelectedProductQuantity(
-                                                product, 1, false);
-                                            _calculateTotalPrice();
-                                            setState(() {});
-                                          },
-                                          minus: () {
-                                            if (product.quantity!.value == 1) {
-                                              setState(() {
-                                                selectedProducts
-                                                    .remove(product);
+                                            return Item(
+                                              subProducts: product.subProduct,
+                                              costOnChange: (String value) {
+                                                if (value != "") {
+                                                  product.cost =
+                                                      double.parse(value);
+                                                  _calculateTotalPrice();
+                                                }
+                                              },
+                                              onFieldSubmitted: (String value) {
+                                                setState(() {});
+                                              },
+                                              cost: totalcost,
+                                              imagePath: product.file!,
+                                              name: product.name,
+                                              precio: product.unitPrice,
+                                              quantityOnChange: (String value) {
+                                                if (value == "") {
+                                                  return;
+                                                }
+                                                product.quantity!.value =
+                                                    int.parse(value);
+                                                _updateCheckoutButtonState();
+                                                _updateSelectedProductQuantity(
+                                                    product,
+                                                    int.parse(controller.text),
+                                                    true);
+                                                totalOwned = totalquantity -
+                                                    grantTotalOwned;
                                                 _calculateTotalPrice();
-                                              });
-                                              return;
-                                            }
+                                                setState(() {});
+                                              },
+                                              plus: () {
+                                                product.quantity!.value++;
+                                                _updateCheckoutButtonState();
+                                                _updateSelectedProductQuantity(
+                                                    product, 1, false);
+                                                _calculateTotalPrice();
+                                                setState(() {});
+                                              },
+                                              minus: () {
+                                                if (product.quantity!.value ==
+                                                    1) {
+                                                  setState(() {
+                                                    selectedProducts
+                                                        .remove(product);
+                                                    _calculateTotalPrice();
+                                                  });
+                                                  return;
+                                                }
 
-                                            product.quantity!.value--;
-                                            _updateCheckoutButtonState();
-                                            _updateSelectedProductQuantity(
-                                                product, -1, false);
-                                            _calculateTotalPrice();
-                                            setState(() {});
+                                                product.quantity!.value--;
+                                                _updateCheckoutButtonState();
+                                                _updateSelectedProductQuantity(
+                                                    product, -1, false);
+                                                _calculateTotalPrice();
+                                                setState(() {});
+                                              },
+                                              hasTrailing: true,
+                                              quantity: product.quantity!,
+                                              quantityCTRController: controller,
+                                              magnitud: product.unit,
+                                              unitPriceCTRController:
+                                                  unitPriceControllers,
+                                            );
                                           },
-                                          hasTrailing: true,
-                                          quantity: product.quantity!,
-                                          quantityCTRController: controller,
-                                          magnitud: product.unit,
-                                          unitPriceCTRController:
-                                              unitPriceControllers,
-                                        );
-                                      },
-                                    ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                             _selectedOption == 'Alquiler'
                                 ? Container()
@@ -911,67 +958,68 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                         (context, olselectedProducts, child) {
                                       return Column(
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 20),
-                                            height: 40,
-                                            decoration: const BoxDecoration(
-                                                color: Color.fromARGB(
-                                                    255, 226, 213, 78)),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                const Text("Precio Total",
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 15)),
-                                                ValueListenableBuilder<double>(
-                                                  valueListenable:
-                                                      totalPriceNotifier,
-                                                  builder: (context, totalPrice,
-                                                      child) {
-                                                    return Text(
-                                                      "\$ ${olselectedProducts.isNotEmpty ? precioTotalSell(olselectedProducts).toStringAsFixed(2) : totalPrice}",
-                                                      style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 15),
-                                                    );
-                                                  },
+                                          Column(
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 20),
+                                                height: 40,
+                                                decoration: const BoxDecoration(
+                                                    color: Color.fromARGB(
+                                                        255, 226, 213, 78)),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    const Text("Precio Total",
+                                                        style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 15)),
+                                                    ValueListenableBuilder<
+                                                        double>(
+                                                      valueListenable:
+                                                          totalPriceNotifier,
+                                                      builder: (context,
+                                                          totalPrice, child) {
+                                                        return Text(
+                                                          "\$ ${olselectedProducts.isNotEmpty ? precioTotalSell(olselectedProducts).toStringAsFixed(2) : totalPrice}",
+                                                          style:
+                                                              const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 15),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ],
                                                 ),
-                                              ],
-                                            ),
+                                              ),
+                                              const SizedBox(
+                                                height: 10,
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                        builder: (context) =>
+                                                            const ChooseComponentScreen()),
+                                                  ).then((value) =>
+                                                      print("$value TESTO"));
+                                                },
+                                                child: const Text(
+                                                    'Costos adicionales'),
+                                              ),
+                                            ],
                                           )
                                         ],
                                       );
                                     },
                                   ),
-                            const SizedBox(height: 20),
-                            const Text('Comentario',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
-                            Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
-                              height: size(context).height * 0.111,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color:
-                                      const Color.fromARGB(255, 202, 202, 202)),
-                              child: TextFormField(
-                                controller: _commnetController,
-                                keyboardType: TextInputType.multiline,
-                                maxLines: null,
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  hintText: 'Escribe tu comentario aquí...',
-                                ),
-                              ),
-                            ),
                             const SizedBox(height: 20),
                             const Text(
                               'Ganancias',
@@ -980,14 +1028,22 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             ),
                             Container(
                               height: 50,
-                              decoration: const BoxDecoration(
-                                color: Color.fromARGB(255, 202, 202, 202),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.2),
+                                    spreadRadius: 2,
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
-                              child: selectedProducts.isEmpty &&
-                                      productDateRanges.values.isEmpty
+                              child: productDateRanges.values.isEmpty
                                   ? const Center(
                                       child: Text(
-                                        "Por favor, escoga al menos un producto",
+                                        "Por favor, escoga una fecha",
                                         style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 15),
@@ -1001,18 +1057,142 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            productDateRanges.isNotEmpty
-                                                ? "${productDateRanges.entries.fold(0, (sum, entry) => sum + entry.value.fold(0, (rangeSum, dateRange) => rangeSum + dateRange.end!.difference(dateRange.start!).inDays + 1)) - selectedProducts.fold(0, (costSum, product) => costSum + product.cost)} "
-                                                : "${totalquantity - totalCost}",
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 18,
-                                            ),
-                                          ),
+                                          ValueListenableBuilder<double>(
+                                            valueListenable: dataBaseProvider
+                                                .totalPriceNotifier,
+                                            builder:
+                                                (context, totalOwned, child) {
+                                              return ValueListenableBuilder(
+                                                valueListenable: dataBaseProvider
+                                                    .selectedProductsNotifier,
+                                                builder: (context,
+                                                    selectedProducts, child) {
+                                                  return ValueListenableBuilder(
+                                                    valueListenable:
+                                                        dataBaseProvider
+                                                            .selectedCommodities,
+                                                    builder: (context,
+                                                        selectedCommodities,
+                                                        child) {
+                                                      final alquilerTotal =
+                                                          totalOwned -
+                                                              selectedProducts
+                                                                  .fold(0, (summ,
+                                                                      product) {
+                                                                final dateRanges =
+                                                                    product.datesUsed ??
+                                                                        [];
+                                                                final totalDays =
+                                                                    dateRanges.fold(
+                                                                        0,
+                                                                        (rangeSum,
+                                                                            dateRange) {
+                                                                  return rangeSum +
+                                                                      dateRange
+                                                                          .end!
+                                                                          .difference(
+                                                                              dateRange.start!)
+                                                                          .inDays +
+                                                                      1;
+                                                                });
+
+                                                                final quantity =
+                                                                    product.quantity
+                                                                            ?.value ??
+                                                                        0;
+                                                                var totalCost =
+                                                                    product.cost *
+                                                                        quantity *
+                                                                        totalDays;
+                                                                if (quantity ==
+                                                                    0) {
+                                                                  return summ;
+                                                                }
+
+                                                                return summ +
+                                                                    totalCost
+                                                                        .toInt();
+                                                              }) +
+                                                              dataBaseProvider
+                                                                  .selectedCommodities
+                                                                  .value
+                                                                  .fold(0.0, (sum,
+                                                                      product) {
+                                                                return sum +
+                                                                    (product.unitPrice -
+                                                                        product
+                                                                            .cost);
+                                                              });
+
+                                                      final otherTotal =
+                                                          selectedProducts.fold(
+                                                              0,
+                                                              (sum, product) {
+                                                        final unitPrice =
+                                                            product.unitPrice;
+                                                        final quantity = product
+                                                                .quantity
+                                                                ?.value ??
+                                                            0;
+                                                        final productCost =
+                                                            product.cost;
+                                                        return sum +
+                                                            ((unitPrice *
+                                                                        quantity) -
+                                                                    productCost)
+                                                                .toInt();
+                                                      });
+
+                                                      return Text(
+                                                        _selectedOption ==
+                                                                'Alquiler'
+                                                            ? "$alquilerTotal"
+                                                            : "$otherTotal",
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 18,
+                                                        ),
+                                                      );
+                                                    },
+                                                  );
+                                                },
+                                              );
+                                            },
+                                          )
                                         ],
                                       ),
                                     ),
+                            ),
+                            const Text('Comentario',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
+                            Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              height: size(context).height * 0.111,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.2),
+                                    spreadRadius: 2,
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: TextFormField(
+                                controller: _commnetController,
+                                keyboardType: TextInputType.multiline,
+                                maxLines: null,
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  hintText: 'Escribe tu comentario aquí...',
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 20),
                             const Text('Pago',
@@ -1023,9 +1203,17 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                   const EdgeInsets.symmetric(horizontal: 10),
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color:
-                                      const Color.fromARGB(255, 202, 202, 202)),
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.2),
+                                    spreadRadius: 2,
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
@@ -1061,13 +1249,23 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                               ),
                             ),
                             const SizedBox(height: 20),
+                            const SizedBox(height: 20),
                             const Text('Total Adeudado',
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold, fontSize: 15)),
                             Container(
                               height: 50,
-                              decoration: const BoxDecoration(
-                                color: Color.fromARGB(255, 202, 202, 202),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.2),
+                                    spreadRadius: 2,
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
                               ),
                               child: selectedProducts.isEmpty &&
                                       productDateRanges.values.isEmpty
@@ -1083,20 +1281,68 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 10, vertical: 10),
                                       width: double.infinity,
-                                      child: Text(
-                                        // Check if there are any entries in productDateRanges
-                                        productDateRanges.isNotEmpty
-                                            ? productDateRanges.entries
-                                                .map((entry) {
-                                                // Assuming you want to calculate the difference for the first entry in the map
-                                                DateRange firstDateRange =
-                                                    entry.value[0];
-                                                return "${firstDateRange.end!.difference(firstDateRange.start!).inDays + 1 - grantTotalOwned}";
-                                              }).first // Take the first calculated value
-                                            : totalOwned.toString(),
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 18),
+                                      child: FutureBuilder<double>(
+                                        future: calculateTotalRentalPrice(
+                                            dataBaseProvider,
+                                            productDateRanges),
+                                        builder: (BuildContext context,
+                                            AsyncSnapshot<double> snapshot) {
+                                          if (snapshot.connectionState ==
+                                              ConnectionState.waiting) {
+                                            return const CircularProgressIndicator(); // Show a loading indicator while waiting
+                                          } else if (snapshot.hasError) {
+                                            return Text(
+                                                'Error: ${snapshot.error}');
+                                          } else {
+                                            final totalRentalPrice =
+                                                snapshot.data ?? 0.0;
+                                            return ValueListenableBuilder<
+                                                double>(
+                                              valueListenable: dataBaseProvider
+                                                  .totalPriceNotifier,
+                                              builder:
+                                                  (context, quantity, child) {
+                                                return ValueListenableBuilder(
+                                                  valueListenable:
+                                                      dataBaseProvider
+                                                          .selectedCommodities,
+                                                  builder: (context,
+                                                      selectedCommodities,
+                                                      child) {
+                                                    final earningsCommodities =
+                                                        selectedCommodities
+                                                            .fold(0.0,
+                                                                (sum, product) {
+                                                      return sum +
+                                                          (product.unitPrice);
+                                                    });
+                                                    final totalOwnedOrder =
+                                                        productDateRanges
+                                                                .isNotEmpty
+                                                            ? (quantity -
+                                                                    grantTotalOwned +
+                                                                    earningsCommodities)
+                                                                .toStringAsFixed(
+                                                                    2)
+                                                            : totalOwned
+                                                                .toString();
+
+                                                    totalOwnedGlobal =
+                                                        totalOwnedOrder;
+                                                    return Text(
+                                                      totalOwnedOrder,
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 18,
+                                                      ),
+                                                    );
+                                                  },
+                                                );
+                                              },
+                                            );
+                                          }
+                                        },
                                       ),
                                     ),
                             ),
@@ -1140,8 +1386,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  void showCalendar(int index, ProductModel product) {
-    List<DateRange> selectedDateRanges = productDateRanges[product] ?? [];
+  void showCalendar(
+      int index, ProductModel product, Function updateTotalPrice) {
+    List<DateRange> selectedDateRanges = productDateRanges[product.id] ?? [];
 
     showModalBottomSheet(
         context: context,
@@ -1189,15 +1436,17 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             return false;
                           }
                         }
-                        for (var range in product.datesUsed ?? []) {
-                          if ((range.start != null && range.end != null) &&
-                              (day.isAfter(range.start!
-                                      .subtract(const Duration(days: 1))) &&
-                                  day.isBefore(range.end!
-                                      .add(const Duration(days: 1))))) {
-                            return false;
-                          }
-                        }
+                        // if (!widget.isEditPage) {
+                        //   for (var range in product.datesUsed ?? []) {
+                        //     if ((range.start != null && range.end != null) &&
+                        //         (day.isAfter(range.start!
+                        //                 .subtract(const Duration(days: 1))) &&
+                        //             day.isBefore(range.end!
+                        //                 .add(const Duration(days: 1))))) {
+                        //       return false;
+                        //     }
+                        //   }
+                        // }
                         return true;
                       },
                       headerStyle: const HeaderStyle(
@@ -1210,58 +1459,80 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         titleTextStyle:
                             TextStyle(fontSize: 18, color: Colors.deepPurple),
                       ),
-                      calendarBuilders: CalendarBuilders(
-                        defaultBuilder: (context, day, focusedDay) {
-                          for (var range in selectedDateRanges) {
-                            if (day.isAfter(range.start!
-                                    .subtract(const Duration(days: 1))) &&
-                                day.isBefore(
-                                    range.end!.add(const Duration(days: 1)))) {
-                              return Container(
-                                margin: const EdgeInsets.all(4.0),
-                                alignment: Alignment.center,
-                                decoration: const BoxDecoration(
-                                  color: Colors.blue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  day.day.toString(),
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              );
-                            }
-                          }
-                          return null;
-                        },
-                      ),
                       firstDay: DateTime.utc(2010, 10, 16),
                       lastDay: DateTime.utc(2030, 3, 14),
-                      focusedDay: focusedDays[product] ?? DateTime.now(),
-                      rangeSelectionMode: rangeSelectionModes[product] ??
+                      focusedDay: focusedDays[product.id] ?? DateTime.now(),
+                      rangeSelectionMode: rangeSelectionModes[product.id] ??
                           RangeSelectionMode.toggledOff,
-                      rangeStartDay: startDays[product],
-                      rangeEndDay: endDays[product],
+                      rangeStartDay: startDays[product.id],
+                      rangeEndDay: endDays[product.id],
                       onDaySelected: (selectedDay, focusedDay) {
                         setState(() {
-                          startDays[product];
-                          if (startDays[product] == null ||
-                              endDays[product] != null) {
-                            startDays[product] = selectedDay;
-                            endDays[product] = null;
-                            rangeSelectionModes[product] =
+                          if (startDays[product.id] == null ||
+                              endDays[product.id] != null) {
+                            // Start a new range selection
+                            startDays[product.id!] = selectedDay;
+                            endDays[product.id!] = null;
+                            rangeSelectionModes[product.id!] =
                                 RangeSelectionMode.toggledOff;
-                          } else if (selectedDay.isAfter(startDays[product]!)) {
-                            endDays[product] = selectedDay;
-                            selectedDateRanges.add(DateRange(
-                                start: startDays[product],
-                                end: endDays[product]));
+
+                            // Single day selection
+                            if (selectedDay == startDays[product.id]) {
+                              // Clear end day for single day selection
+
+                              // Handle single day selection logic if any specific logic is required
+                              selectedDateRanges = [
+                                DateRange(
+                                  start: startDays[product.id],
+                                  end: startDays[product.id],
+                                )
+                              ];
+                              return;
+                            }
+                          } else if (selectedDay
+                              .isAfter(startDays[product.id]!)) {
+                            // Complete the range selection
+                            endDays[product.id!] = selectedDay;
+                            selectedDateRanges = [
+                              DateRange(
+                                start: startDays[product.id],
+                                end: endDays[product.id],
+                              )
+                            ];
+                          } else if (selectedDay == startDays[product.id]) {
+                            // Deselect the start day
+                            startDays[product.id!] = null;
+                            selectedDateRanges.removeWhere((range) =>
+                                range.start == selectedDay &&
+                                range.end == selectedDay);
+                          } else {
+                            // Handle deselection of a previously selected date within a range
+                            selectedDateRanges.removeWhere((range) =>
+                                selectedDay.isAfter(range.start!
+                                    .subtract(const Duration(days: 1))) &&
+                                selectedDay.isBefore(
+                                    range.end!.add(const Duration(days: 1))));
+                            startDays[product.id!] = null;
+                            endDays[product.id!] = null;
+                            rangeSelectionModes[product.id!] =
+                                RangeSelectionMode.toggledOff;
                           }
-                          focusedDays[product] = focusedDay;
+
+                          if (startDays[product.id] != null &&
+                              endDays[product.id] == null) {
+                            selectedDateRanges.clear();
+                            productDateRanges.remove(product.id);
+                            dataBaseProvider.selectedProductsNotifier.value
+                                .removeWhere((p) => p.id == product.id);
+                            dataBaseProvider.selectedProductsNotifier
+                                .notifyListeners();
+                          }
+                          focusedDays[product.id!] = focusedDay;
                         });
                       },
                       onPageChanged: (focusedDay) {
                         setState(() {
-                          focusedDays[product] = focusedDay;
+                          focusedDays[product.id!] = focusedDay;
                         });
                       },
                       calendarStyle: CalendarStyle(
@@ -1281,15 +1552,67 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       onTap: selectedDateRanges.isNotEmpty
                           ? () {
                               setState(() {
-                                productDateRanges[product] =
+                                // Clear all existing date ranges
+                                selectedDateRanges.clear();
+                                DateRange newRange = DateRange(
+                                  start: startDays[product.id],
+                                  end: endDays[product.id],
+                                );
+                                if (endDays[product.id] == null) {
+                                  newRange = DateRange(
+                                    start: startDays[product.id],
+                                    end: startDays[product.id],
+                                  );
+                                }
+                                // Add the new date range
+
+                                selectedDateRanges.add(newRange);
+
+                                // Update productDateRanges with the current product and its date ranges
+                                productDateRanges[product.id!] =
                                     List.from(selectedDateRanges);
-                                startDays[product] =
+
+                                startDays[product.id!] =
                                     selectedDateRanges.first.start;
-                                endDays[product] = selectedDateRanges.last.end;
+                                endDays[product.id!] =
+                                    selectedDateRanges.last.end;
                               });
+
+                              // Remove the product if it's already in the list
+                              dataBaseProvider.selectedProductsNotifier.value
+                                  .removeWhere((existingProduct) =>
+                                      existingProduct.id == product.id);
+
+                              if (!dataBaseProvider
+                                  .selectedProductsNotifier.value
+                                  .contains(product)) {
+                                dataBaseProvider.selectedProductsNotifier.value
+                                    .add(product);
+                              }
+
+                              product.datesUsed = List.from(selectedDateRanges);
+                              dataBaseProvider.selectedProductsNotifier
+                                  .notifyListeners();
+                              updateTotalPrice();
                               Navigator.pop(context);
                             }
-                          : null,
+                          : () {
+                              setState(() {
+                                // If start day is selected and end day is null, clear the date ranges for this product
+                                selectedDateRanges.clear();
+                                print("TEST2");
+
+                                // Remove the product's date ranges from productDateRanges
+                                productDateRanges.remove(product.id);
+
+                                // Remove the product from selectedProductsNotifier
+                                dataBaseProvider.selectedProductsNotifier.value
+                                    .removeWhere((p) => p.id == product.id);
+                                dataBaseProvider.selectedProductsNotifier
+                                    .notifyListeners();
+                              });
+                              Navigator.pop(context);
+                            },
                       child: Container(
                         height: 50,
                         width: 200,
@@ -1299,10 +1622,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                               : Colors.grey,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
-                            "Continue",
-                            style: TextStyle(
+                            selectedDateRanges.isNotEmpty
+                                ? "Continuar"
+                                : "Cancelar",
+                            style: const TextStyle(
                                 fontSize: 20,
                                 color: Colors.white,
                                 fontWeight: FontWeight.w500),
@@ -1465,15 +1790,13 @@ class _VentaWidgetState extends State<VentaWidget> {
 }
 
 class AlquilerWidget extends StatefulWidget {
-  final DataBase dataBaseProvider;
-  final void Function(int, ProductModel) showCalendar;
-  final Map<ProductModel, List<DateRange>> productDateRanges;
-  final double Function(List<ProductModel>, Map<ProductModel, List<DateRange>>)
+  final void Function(int, ProductModel, Function) showCalendar;
+  final Map<int, List<DateRange>> productDateRanges;
+  final double Function(List<ProductModel>, Map<int, List<DateRange>>)
       calculateTotalCost;
 
   const AlquilerWidget({
     super.key,
-    required this.dataBaseProvider,
     required this.showCalendar,
     required this.productDateRanges,
     required this.calculateTotalCost,
@@ -1486,7 +1809,10 @@ class AlquilerWidget extends StatefulWidget {
 class _AlquilerWidgetState extends State<AlquilerWidget> {
   late TextEditingController _searchController;
   final ValueNotifier<String> _searchTextNotifier = ValueNotifier('');
-  int newIndex = -1;
+  final Map<String, ValueNotifier<int>> productQuantities = {};
+  final Map<String, ValueNotifier<double>> productTotalPrices = {};
+  final ValueNotifier<double> _totalPriceNotifier = ValueNotifier<double>(0);
+  late DataBase dataBaseProvider;
 
   @override
   void initState() {
@@ -1495,19 +1821,72 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
     _searchController.addListener(() {
       _searchTextNotifier.value = _searchController.text;
     });
+    dataBaseProvider = Provider.of<DataBase>(context, listen: false);
+
+    dataBaseProvider.totalPriceNotifier = _totalPriceNotifier;
   }
 
   @override
   void dispose() {
+    dataBaseProvider.selectedCommodities.value.clear();
     _searchController.dispose();
     _searchTextNotifier.dispose();
+    productQuantities.forEach((key, value) => value.dispose());
+    productTotalPrices.forEach((key, value) => value.dispose());
+    _totalPriceNotifier.dispose();
     super.dispose();
+  }
+
+  void _handleQuantityChanged(String productName, int quantity) {
+    if (productQuantities[productName] == null) {
+      productQuantities[productName] = ValueNotifier<int>(quantity);
+    } else {
+      productQuantities[productName]!.value = quantity;
+    }
+    _updateProductTotalPrice(productName);
+    _updateTotalPrice();
+  }
+
+  double _calculateProductTotalPrice(ProductModel product) {
+    final quantity = productQuantities[product.name]?.value ?? 0;
+    final dateRanges = widget.productDateRanges[product.id] ?? [];
+    final totalDays = dateRanges.fold(
+      0,
+      (sum, dateRange) =>
+          sum + dateRange.end!.difference(dateRange.start!).inDays + 1,
+    );
+    return totalDays * product.unitPrice * quantity;
+  }
+
+  void _updateProductTotalPrice(String productName) {
+    final product = dataBaseProvider.selectedProductsNotifier.value
+        .firstWhere((p) => p.name == productName);
+    final totalPrice = _calculateProductTotalPrice(product);
+    if (productTotalPrices[productName] == null) {
+      productTotalPrices[productName] = ValueNotifier<double>(totalPrice);
+    } else {
+      productTotalPrices[productName]!.value = totalPrice;
+    }
+    final quantity = productQuantities[product.name]!;
+
+    product.quantity = quantity;
+  }
+
+  void _updateTotalPrice() {
+    double totalPrice = dataBaseProvider.selectedProductsNotifier.value
+        .where((product) =>
+            widget.productDateRanges[product.id] != null &&
+            widget.productDateRanges[product.id]!.isNotEmpty)
+        .fold<double>(
+            0, (sum, product) => sum + _calculateProductTotalPrice(product));
+
+    _totalPriceNotifier.value = totalPrice;
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<ProductModel>>(
-      future: widget.dataBaseProvider.obtenerProductos(),
+      future: dataBaseProvider.obtenerProductos(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
           var products = snapshot.data ?? [];
@@ -1547,13 +1926,6 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                 product.productCategory == "En alquiler")
                             .toList();
 
-                        // Filter only products with selected date ranges
-                        List<ProductModel> productsWithDateRanges =
-                            filteredProducts.where((product) {
-                          return widget.productDateRanges[product] != null &&
-                              widget.productDateRanges[product]!.isNotEmpty;
-                        }).toList();
-
                         return Column(
                           children: [
                             SizedBox(
@@ -1564,87 +1936,603 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                   ProductModel product =
                                       filteredProducts[index];
 
-                                  return GestureDetector(
-                                    onTap: () {
-                                      widget.showCalendar(index, product);
+                                  bool isSelected = dataBaseProvider
+                                      .selectedProductsNotifier.value
+                                      .any((p) => p.id == product.id);
+
+                                  if (productQuantities[product.name] == null) {
+                                    productQuantities[product.name] =
+                                        ValueNotifier<int>(0);
+                                  }
+
+                                  if (productTotalPrices[product.name] ==
+                                      null) {
+                                    productTotalPrices[product.name] =
+                                        ValueNotifier<double>(0);
+                                  }
+
+                                  return ValueListenableBuilder<int>(
+                                    valueListenable:
+                                        productQuantities[product.name]!,
+                                    builder: (context, quantity, child) {
+                                      return GestureDetector(
+                                          onTap: () {
+                                            widget.showCalendar(index, product,
+                                                () {
+                                              _handleQuantityChanged(
+                                                  product.name, quantity);
+                                            });
+                                          },
+                                          child: ProductTile(
+                                            productModel: product,
+                                            imagePath: product.file!,
+                                            productName: product.name,
+                                            initialQuantity: quantity,
+                                            onQuantityChanged: (quantity) {
+                                              List<ProductModel> currentList =
+                                                  dataBaseProvider
+                                                      .selectedProductsNotifier
+                                                      .value;
+
+                                              // Find the product in the current list
+                                              bool productExists =
+                                                  currentList.any((p) =>
+                                                      p.id == product.id);
+
+                                              if (quantity == 0) {
+                                                // If the quantity is 0, remove the product from the list if it exists
+                                                if (productExists) {
+                                                  _handleQuantityChanged(
+                                                      product.name, quantity);
+                                                  List<ProductModel>
+                                                      updatedList =
+                                                      List<ProductModel>.from(
+                                                          currentList);
+                                                  updatedList.removeWhere((p) =>
+                                                      p.id == product.id);
+                                                  dataBaseProvider
+                                                      .selectedProductsNotifier
+                                                      .value = updatedList;
+                                                }
+                                              } else {
+                                                // If the quantity is not 0, update the quantity of the product or add it if it does not exist
+                                                if (productExists) {
+                                                  // Update the borrowQuantity for the existing product
+                                                  currentList =
+                                                      currentList.map((p) {
+                                                    if (p.id == product.id) {
+                                                      p.datesUsed = p.datesUsed!
+                                                          .map((dateRange) {
+                                                        if (isDateInRange(
+                                                            DateTime.now(),
+                                                            dateRange.start!,
+                                                            dateRange.end!)) {
+                                                          return dateRange
+                                                              .copyWith(
+                                                                  borrowQuantity:
+                                                                      quantity);
+                                                        }
+                                                        return dateRange;
+                                                      }).toList();
+                                                    }
+                                                    return p;
+                                                  }).toList();
+                                                } else {
+                                                  // Add the product with the new borrowQuantity
+                                                  product.datesUsed = product
+                                                      .datesUsed!
+                                                      .map((dateRange) {
+                                                    if (isDateInRange(
+                                                        DateTime.now(),
+                                                        dateRange.start!,
+                                                        dateRange.end!)) {
+                                                      return dateRange.copyWith(
+                                                          borrowQuantity:
+                                                              quantity);
+                                                    }
+                                                    return dateRange;
+                                                  }).toList();
+                                                  currentList.add(product);
+                                                }
+                                                // Update the list
+                                                dataBaseProvider
+                                                    .selectedProductsNotifier
+                                                    .value = currentList;
+                                                _handleQuantityChanged(
+                                                    product.name, quantity);
+                                              }
+                                            },
+                                          ));
                                     },
-                                    child: ListTile(
-                                      leading: Container(
-                                        height: 30,
-                                        width: 30,
-                                        decoration: BoxDecoration(
-                                          image: DecorationImage(
-                                            fit: BoxFit.contain,
-                                            image:
-                                                FileImage(File(product.file!)),
-                                          ),
-                                          color: const Color(0xffD8DFFF),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                      ),
-                                      title: Text(product.name),
-                                      trailing: index == newIndex
-                                          ? const Icon(
-                                              Icons.check,
-                                              color: Colors.green,
-                                            )
-                                          : const SizedBox(
-                                              height: 10,
-                                              width: 10,
-                                            ),
-                                    ),
                                   );
                                 },
                               ),
                             ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ChooseComponentScreen()),
+                                ).then((value) {
+                                  dataBaseProvider.selectedCommodities
+                                      .notifyListeners();
+                                });
+                              },
+                              child: const Text('Costos adicionales'),
+                            ),
                             Column(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20),
-                                  decoration: const BoxDecoration(
-                                      color: Color.fromARGB(255, 226, 213, 78)),
-                                  child: productsWithDateRanges.isEmpty
-                                      ? const Center(
-                                          child: Text(
-                                            "Ningun dia seleccionado",
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 20),
+                                    decoration: const BoxDecoration(),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        ValueListenableBuilder(
+                                            valueListenable: dataBaseProvider
+                                                .selectedProductsNotifier,
+                                            builder:
+                                                (context, productList, child) {
+                                              return Column(
+                                                children: [
+                                                  SizedBox(
+                                                    child: ListView.builder(
+                                                      shrinkWrap: true,
+                                                      itemCount:
+                                                          productList.length,
+                                                      itemBuilder:
+                                                          (conxtext, i) {
+                                                        final product =
+                                                            productList[i];
+                                                        final productTotalPriceNotifier =
+                                                            productTotalPrices[
+                                                                product.name]!;
+                                                        return ValueListenableBuilder(
+                                                          valueListenable:
+                                                              productTotalPriceNotifier,
+                                                          builder: (context,
+                                                              totalPrice,
+                                                              child) {
+                                                            return Container(
+                                                              margin:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      vertical:
+                                                                          8.0),
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .all(
+                                                                      16.0),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: Colors
+                                                                    .white,
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            16),
+                                                                boxShadow: [
+                                                                  BoxShadow(
+                                                                    color: Colors
+                                                                        .grey
+                                                                        .withOpacity(
+                                                                            0.2),
+                                                                    spreadRadius:
+                                                                        2,
+                                                                    blurRadius:
+                                                                        8,
+                                                                    offset:
+                                                                        const Offset(
+                                                                            0,
+                                                                            3),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                              child: Column(
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .start,
+                                                                children: [
+                                                                  Text(
+                                                                    product
+                                                                        .name,
+                                                                    style:
+                                                                        const TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                      fontSize:
+                                                                          20,
+                                                                      color: Colors
+                                                                          .black87,
+                                                                    ),
+                                                                  ),
+                                                                  const SizedBox(
+                                                                      height:
+                                                                          8),
+                                                                  Row(
+                                                                    mainAxisAlignment:
+                                                                        MainAxisAlignment
+                                                                            .spaceBetween,
+                                                                    children: [
+                                                                      Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          const Text(
+                                                                            "Precio por día:",
+                                                                            style:
+                                                                                TextStyle(
+                                                                              fontSize: 14,
+                                                                              color: Colors.black54,
+                                                                            ),
+                                                                          ),
+                                                                          Text(
+                                                                            "\$${product.unitPrice.toStringAsFixed(2)}",
+                                                                            style:
+                                                                                const TextStyle(
+                                                                              fontSize: 16,
+                                                                              fontWeight: FontWeight.bold,
+                                                                              color: Colors.black87,
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 16), // Space between rows
+                                                                          const Text(
+                                                                            "Cantidad:",
+                                                                            style:
+                                                                                TextStyle(
+                                                                              fontSize: 14,
+                                                                              color: Colors.black54,
+                                                                            ),
+                                                                          ),
+                                                                          ValueListenableBuilder<
+                                                                              int>(
+                                                                            valueListenable:
+                                                                                productQuantities[product.name]!,
+                                                                            builder: (context,
+                                                                                quantity,
+                                                                                child) {
+                                                                              return Text(
+                                                                                quantity.toString(),
+                                                                                style: const TextStyle(
+                                                                                  fontSize: 16,
+                                                                                  fontWeight: FontWeight.bold,
+                                                                                  color: Colors.black87,
+                                                                                ),
+                                                                              );
+                                                                            },
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                      Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          const Text(
+                                                                            "Días seleccionados:",
+                                                                            style:
+                                                                                TextStyle(
+                                                                              fontSize: 14,
+                                                                              color: Colors.black54,
+                                                                            ),
+                                                                          ),
+                                                                          Text(
+                                                                            "${widget.productDateRanges[product.id]?.fold<int>(0, (sum, dateRange) => sum + dateRange.end!.difference(dateRange.start!).inDays + 1) ?? 0} días",
+                                                                            style:
+                                                                                const TextStyle(
+                                                                              fontSize: 16,
+                                                                              fontWeight: FontWeight.bold,
+                                                                              color: Colors.black87,
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 16), // Space between rows
+                                                                          const Text(
+                                                                            "Precio total:",
+                                                                            style:
+                                                                                TextStyle(
+                                                                              fontSize: 14,
+                                                                              color: Colors.black54,
+                                                                            ),
+                                                                          ),
+                                                                          Text(
+                                                                            "\$${totalPrice.toStringAsFixed(2)}",
+                                                                            style:
+                                                                                const TextStyle(
+                                                                              fontSize: 16,
+                                                                              fontWeight: FontWeight.bold,
+                                                                              color: Colors.green,
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            );
+                                                          },
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            }),
+                                        ValueListenableBuilder(
+                                            valueListenable: dataBaseProvider
+                                                .selectedCommodities,
+                                            builder:
+                                                (context, productList, child) {
+                                              return Column(
+                                                children: [
+                                                  SizedBox(
+                                                    child: ListView.builder(
+                                                      shrinkWrap: true,
+                                                      itemCount:
+                                                          productList.length,
+                                                      itemBuilder:
+                                                          (conxtext, i) {
+                                                        final product =
+                                                            productList[i];
+
+                                                        return Container(
+                                                          margin:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                  vertical:
+                                                                      8.0),
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .all(16.0),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors.white,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        16),
+                                                            boxShadow: [
+                                                              BoxShadow(
+                                                                color: Colors
+                                                                    .grey
+                                                                    .withOpacity(
+                                                                        0.2),
+                                                                spreadRadius: 2,
+                                                                blurRadius: 8,
+                                                                offset:
+                                                                    const Offset(
+                                                                        0, 3),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            children: [
+                                                              Text(
+                                                                product.name,
+                                                                style:
+                                                                    const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 20,
+                                                                  color: Colors
+                                                                      .black87,
+                                                                ),
+                                                              ),
+                                                              const SizedBox(
+                                                                  height: 8),
+                                                              Row(
+                                                                mainAxisAlignment:
+                                                                    MainAxisAlignment
+                                                                        .spaceBetween,
+                                                                children: [
+                                                                  Column(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .start,
+                                                                    children: [
+                                                                      Text(
+                                                                        "Precio por ${product.unit.toLowerCase()}",
+                                                                        style:
+                                                                            const TextStyle(
+                                                                          fontSize:
+                                                                              14,
+                                                                          color:
+                                                                              Colors.black54,
+                                                                        ),
+                                                                      ),
+                                                                      Text(
+                                                                        "\$${product.unitPrice.toStringAsFixed(2)}",
+                                                                        style:
+                                                                            const TextStyle(
+                                                                          fontSize:
+                                                                              16,
+                                                                          fontWeight:
+                                                                              FontWeight.bold,
+                                                                          color:
+                                                                              Colors.black87,
+                                                                        ),
+                                                                      ),
+                                                                      const SizedBox(
+                                                                          height:
+                                                                              16),
+                                                                      const Text(
+                                                                        "Cantidad:",
+                                                                        style:
+                                                                            TextStyle(
+                                                                          fontSize:
+                                                                              14,
+                                                                          color:
+                                                                              Colors.black54,
+                                                                        ),
+                                                                      ),
+                                                                      Text(
+                                                                        product
+                                                                            .quantity!
+                                                                            .value
+                                                                            .toString(),
+                                                                        style:
+                                                                            const TextStyle(
+                                                                          fontSize:
+                                                                              16,
+                                                                          fontWeight:
+                                                                              FontWeight.bold,
+                                                                          color:
+                                                                              Colors.black87,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                  Column(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .start,
+                                                                    children: [
+                                                                      const SizedBox(
+                                                                          height:
+                                                                              16),
+                                                                      const Text(
+                                                                        "Precio total:",
+                                                                        style:
+                                                                            TextStyle(
+                                                                          fontSize:
+                                                                              14,
+                                                                          color:
+                                                                              Colors.black54,
+                                                                        ),
+                                                                      ),
+                                                                      Text(
+                                                                        (product.quantity!.value *
+                                                                                product.unitPrice)
+                                                                            .toStringAsFixed(2),
+                                                                        style:
+                                                                            const TextStyle(
+                                                                          fontSize:
+                                                                              16,
+                                                                          fontWeight:
+                                                                              FontWeight.bold,
+                                                                          color:
+                                                                              Colors.green,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                              const SizedBox(
+                                                                  height: 16),
+                                                              const Center(
+                                                                child: Text(
+                                                                  "Costo adicional",
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontSize:
+                                                                        14,
+                                                                    color: Colors
+                                                                        .black54,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            }),
+                                        if (dataBaseProvider
+                                            .selectedProductsNotifier.value
+                                            .where((product) =>
+                                                widget.productDateRanges[
+                                                        product.id] !=
+                                                    null &&
+                                                widget
+                                                    .productDateRanges[
+                                                        product.id]!
+                                                    .isNotEmpty)
+                                            .isNotEmpty)
+                                          Container(
+                                            margin: const EdgeInsets.symmetric(
+                                                vertical: 16.0,
+                                                horizontal: 10.0),
+                                            padding: const EdgeInsets.all(16.0),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.grey
+                                                      .withOpacity(0.2),
+                                                  spreadRadius: 2,
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 3),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  "Precio Total",
+                                                  style: TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.black87,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                ValueListenableBuilder<double>(
+                                                  valueListenable:
+                                                      _totalPriceNotifier,
+                                                  builder: (context, totalPrice,
+                                                      child) {
+                                                    return ValueListenableBuilder(
+                                                      valueListenable:
+                                                          dataBaseProvider
+                                                              .selectedCommodities,
+                                                      builder: (context,
+                                                          selectedCommodities,
+                                                          child) {
+                                                        final earningsCommodities =
+                                                            selectedCommodities
+                                                                .fold(0.0, (sum,
+                                                                    product) {
+                                                          return sum +
+                                                              (product
+                                                                  .unitPrice);
+                                                        });
+                                                        return Text(
+                                                          "\$${totalPrice + earningsCommodities}",
+                                                          style: TextStyle(
+                                                            fontSize: 20,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors
+                                                                .green[700],
+                                                          ),
+                                                        );
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        )
-                                      : Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: productsWithDateRanges
-                                              .map((product) {
-                                            final dateRanges = widget
-                                                .productDateRanges[product];
-                                            final totalDays =
-                                                dateRanges != null &&
-                                                        dateRanges.isNotEmpty
-                                                    ? dateRanges.fold(
-                                                        0,
-                                                        (sum, dateRange) =>
-                                                            sum +
-                                                            dateRange.end!
-                                                                .difference(
-                                                                    dateRange
-                                                                        .start!)
-                                                                .inDays +
-                                                            1)
-                                                    : 0;
-                                            return Text(
-                                              "${product.name} precio por día | $totalDays días x ${product.unitPrice}",
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 18,
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                ),
+                                      ],
+                                    )),
                               ],
                             )
                           ],
@@ -1661,5 +2549,11 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
         }
       },
     );
+  }
+
+  bool isDateInRange(DateTime date, DateTime start, DateTime end) {
+    return date.isAfter(start) && date.isBefore(end) ||
+        date.isAtSameMomentAs(start) ||
+        date.isAtSameMomentAs(end);
   }
 }

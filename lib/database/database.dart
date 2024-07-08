@@ -1,13 +1,20 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:path/path.dart' as path;
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 class DataBase extends ChangeNotifier {
+  ValueNotifier<double> totalPriceNotifier = ValueNotifier<double>(0);
+  ValueNotifier<int> quantityNotifier = ValueNotifier(0);
+
   ValueNotifier<List<ProductModel>> selectedProductsNotifier =
       ValueNotifier<List<ProductModel>>([]);
 
@@ -52,6 +59,21 @@ class DataBase extends ChangeNotifier {
       },
       version: 6, // Increment the version of the database
     );
+  }
+
+  Future<ProductModel?> getProductById(int id) async {
+    final db = await getDatabase();
+    final List<Map<String, dynamic>> maps = await db.query(
+      'products',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (maps.isNotEmpty) {
+      return ProductModel.fromMap(maps.first);
+    } else {
+      return null;
+    }
   }
 
   Future<void> insertProduct(ProductModel productModel) async {
@@ -421,6 +443,13 @@ class DataBase extends ChangeNotifier {
             where: 'orderId = ?',
             whereArgs: [orderId],
           );
+        } else {
+          // For rental orders, clear previous entries to avoid duplication
+          await txn.delete(
+            'order_products',
+            where: 'orderId = ?',
+            whereArgs: [orderId],
+          );
         }
 
         // Insert updated products
@@ -465,5 +494,114 @@ class DataBase extends ChangeNotifier {
     });
 
     notifyListeners(); // Notify listeners to update the UI if needed
+  }
+
+  // Method to export database data as JSON
+  Future<String> exportDatabaseToJson() async {
+    final db = await getDatabase();
+
+    // Retrieve data from the tables
+    final List<Map<String, dynamic>> products = await db.query('products');
+    final List<Map<String, dynamic>> orders = await db.query('orders');
+    final List<Map<String, dynamic>> orderProducts =
+        await db.query('order_products');
+
+    // Create a map with the data
+    final Map<String, dynamic> data = {
+      'products': products,
+      'orders': orders,
+      'order_products': orderProducts,
+    };
+
+    // Convert the map to a JSON string
+    return jsonEncode(data);
+  }
+
+  // Method to save JSON data to a user-selected directory
+  Future<void> saveJsonToFile(String jsonString) async {
+    // Open the directory picker
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+    if (selectedDirectory != null) {
+      const String fileName = 'database_backup.json';
+      final File file = File(path.join(selectedDirectory, fileName));
+
+      // Write the JSON string to the file
+      await file.writeAsString(jsonString);
+    }
+  }
+
+  // Method to back up the database
+  Future<void> backupDatabase() async {
+    String jsonString = await exportDatabaseToJson();
+    await saveJsonToFile(jsonString);
+  }
+
+  // Method to load data from a JSON file
+  Future<void> loadDataFromJson() async {
+    // Open the file picker in read mode
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      final File file = File(result.files.single.path!);
+      final String jsonString = await file.readAsString();
+
+      // Parse the JSON data
+      final Map<String, dynamic> data = jsonDecode(jsonString);
+
+      // Clear the existing data
+      await clearExistingData();
+
+      // Insert the new data
+      await insertProductsFromJson(data['products']);
+      await insertOrdersFromJson(data['orders'], data['order_products']);
+
+      notifyListeners();
+    }
+  }
+
+  // Helper method to clear existing data
+  Future<void> clearExistingData() async {
+    final db = await getDatabase();
+    await db.delete('products');
+    await db.delete('orders');
+    await db.delete('order_products');
+  }
+
+  // Helper methods to insert data from JSON
+  Future<void> insertProductsFromJson(List<dynamic> productData) async {
+    final db = await getDatabase();
+    for (var product in productData) {
+      await db.insert(
+        'products',
+        ProductModel.fromMap(product).toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  Future<void> insertOrdersFromJson(
+    List<dynamic> orderData,
+    List<dynamic> orderProductData,
+  ) async {
+    final db = await getDatabase();
+    for (var order in orderData) {
+      await db.insert(
+        'orders',
+        OrderModel.fromMap(order).toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+
+    for (var orderProduct in orderProductData) {
+      await db.insert(
+        'order_products',
+        orderProduct,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
 }

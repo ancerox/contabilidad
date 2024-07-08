@@ -35,20 +35,18 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    int totalquantity = widget.productModelList.fold(
-      0,
-      (int sum, ProductModel product) {
-        if (product.datesUsed != null && product.datesUsed!.isNotEmpty) {
-          int totalDays =
-              widget.markedDays.fold(0, (int total, DateRange range) {
-            return total + (range.end!.difference(range.start!).inDays + 1);
-          });
-          return sum + (totalDays * product.unitPrice.toInt());
-        } else {
-          return sum + (product.unitPrice.toInt() * product.quantity!.value);
-        }
-      },
-    );
+    double totalPrice = 0.0;
+
+    for (var product in widget.productModelList) {
+      if (product.datesUsed != null && product.datesUsed!.isNotEmpty) {
+        int totalDays = product.datesUsed!.fold(0, (int sum, DateRange range) {
+          return sum + (range.end!.difference(range.start!).inDays + 1);
+        });
+        totalPrice += totalDays * product.unitPrice;
+      } else {
+        totalPrice += product.unitPrice * product.quantity!.value;
+      }
+    }
 
     ThemeData theme = Theme.of(context);
     return Scaffold(
@@ -96,7 +94,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                           Icons.date_range),
                       _buildHeaderDetail(
                           'Precio Total:',
-                          '\$${totalquantity.toStringAsFixed(2)}',
+                          '\$${totalPrice.toStringAsFixed(2)}',
                           Icons.attach_money,
                           isTotal: true),
                     ],
@@ -114,11 +112,18 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     child: ListTile(
                       leading:
                           Icon(Icons.shopping_cart, color: theme.primaryColor),
-                      title: Text(product.name),
-                      subtitle: Text(
-                          'Cantidad: ${product.quantity!.value} x \$${product.unitPrice.toStringAsFixed(2)} (cada uno)'),
+                      title: Text(
+                          "${product.quantity!.value} ${product.unit.toLowerCase()} x ${product.name}"),
+                      subtitle: product.datesUsed != null &&
+                              product.datesUsed!.isNotEmpty
+                          ? Text(_buildRentalProductSubtitle(product))
+                          : Text(
+                              'Cantidad: ${product.quantity!.value} x \$${product.unitPrice.toStringAsFixed(2)} (cada uno)'),
                       trailing: Text(
-                        '\$${(product.quantity!.value * product.unitPrice).toStringAsFixed(2)}',
+                        product.datesUsed != null &&
+                                product.datesUsed!.isNotEmpty
+                            ? '\$${_calculateTotalRentalPrice(product).toStringAsFixed(2)}'
+                            : '\$${(product.quantity!.value * product.unitPrice).toStringAsFixed(2)}',
                       ),
                     ),
                   )),
@@ -150,6 +155,16 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     ),
                   ),
                   onPressed: () async {
+                    if (widget.orderModel.productList!
+                        .any((element) => element.datesUsed!.isNotEmpty)) {
+                      await dataBaseProvider.createOrderWithProducts(
+                          widget.orderModel, widget.productModelList);
+                      dataBaseProvider.selectedProductsNotifier.value = [];
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => HomePage()));
+                      return;
+                    }
+
                     await dataBaseProvider.createOrderWithProducts(
                         widget.orderModel, widget.productModelList);
 
@@ -177,6 +192,20 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
     );
   }
 
+  String _buildRentalProductSubtitle(ProductModel product) {
+    int totalDays = product.datesUsed!.fold(0, (int sum, DateRange range) {
+      return sum + (range.end!.difference(range.start!).inDays + 1);
+    });
+    return 'Días: $totalDays x \$${product.unitPrice.toStringAsFixed(2)} (por día)';
+  }
+
+  double _calculateTotalRentalPrice(ProductModel product) {
+    int totalDays = product.datesUsed!.fold(0, (int sum, DateRange range) {
+      return sum + (range.end!.difference(range.start!).inDays + 1);
+    });
+    return totalDays * product.unitPrice;
+  }
+
   String _formatDatesUsed() {
     final datesUsed = widget.productModelList
         .expand((product) => product.datesUsed ?? [])
@@ -199,47 +228,6 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
     return formattedDates;
   }
 
-  Future<void> generateAndSavePdf(
-      OrderModel order, List<ProductModel> products) async {
-    final pdf = pw.Document();
-    pdf.addPage(pw.Page(build: (pw.Context context) {
-      return pw.Column(
-        children: [
-          pw.Text('Recibo de Pedido', style: const pw.TextStyle(fontSize: 24)),
-          pw.Divider(),
-          pw.Text('Cliente: ${order.clientName}'),
-          pw.Text('Contacto: ${order.celNumber}'),
-          pw.Text('Dirección: ${order.direccion}'),
-          pw.Text('Fecha: ${_formatDatesUsed()}'),
-          pw.Text('Costo Total: \$${order.totalCost.toStringAsFixed(2)}'),
-          pw.Divider(),
-          pw.ListView.builder(
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              final product = products[index];
-              return pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(product.name),
-                  pw.Text(
-                      '${product.amount} x \$${product.unitPrice.toStringAsFixed(2)}'),
-                  pw.Text(
-                      '\$${(product.amount * product.unitPrice).toStringAsFixed(2)}'),
-                ],
-              );
-            },
-          ),
-          if (order.comment.isNotEmpty)
-            pw.Text('Comentarios: ${order.comment}'),
-        ],
-      );
-    }));
-
-    // Save the document
-    await Printing.sharePdf(
-        bytes: await pdf.save(), filename: 'recibo_pedido_${order.id}.pdf');
-  }
-
   Widget _buildHeaderDetail(String label, String value, IconData icon,
       {bool isTotal = false}) {
     return ListTile(
@@ -260,5 +248,120 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
       subtitle: Text(value),
       contentPadding: const EdgeInsets.symmetric(vertical: 4),
     );
+  }
+
+  Future<void> generateAndSavePdf(
+      OrderModel order, List<ProductModel> products) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        build: (pw.Context context) {
+          return pw.Column(
+            children: [
+              // Receipt Header
+              pw.Text('Recibo de Pedido',
+                  style: const pw.TextStyle(fontSize: 24)),
+              pw.SizedBox(height: 8),
+              pw.Text('Gracias por tu pedido, ${order.clientName}'),
+              pw.SizedBox(height: 8),
+              pw.Text('Este es el recibo de tu pedido.'),
+              pw.Divider(),
+
+              // Order Details
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Número de Pedido'),
+                  pw.Text('${order.orderNumber}'),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Fecha'),
+                  pw.Text(order.date),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Cliente'),
+                  pw.Text(order.clientName),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Teléfono'),
+                  pw.Text(order.celNumber),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Dirección'),
+                  pw.Text(order.direccion),
+                ],
+              ),
+              pw.Divider(),
+
+              // Product List
+              pw.ListView.builder(
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                          '${product.quantity!.value} ${product.unit} x ${product.name}'),
+                      pw.Text("\$${product.unitPrice.toStringAsFixed(2)}"),
+                    ],
+                  );
+                },
+              ),
+              pw.Divider(),
+
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Total a Pagar'),
+                  pw.Text('\$${order.totalOwned} DOP'),
+                ],
+              ),
+
+              pw.Divider(),
+
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Estado'),
+                  pw.Text(order.status),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Comentario'),
+                  pw.Text(order.comment),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    // Save and share the document
+    await Printing.sharePdf(
+        bytes: await pdf.save(), filename: 'recibo_pedido_${order.id}.pdf');
   }
 }
