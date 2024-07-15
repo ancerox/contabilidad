@@ -4,6 +4,7 @@ import 'package:contabilidad/models/product_model.dart';
 import 'package:flutter/material.dart';
 
 class ProductTile extends StatefulWidget {
+  final DateTime dateSelected;
   final ProductModel productModel;
   final String imagePath;
   final String productName;
@@ -11,6 +12,7 @@ class ProductTile extends StatefulWidget {
   final int initialQuantity;
 
   const ProductTile({
+    required this.dateSelected,
     required this.productModel,
     super.key,
     required this.imagePath,
@@ -46,9 +48,12 @@ class _ProductTileState extends State<ProductTile> {
   void _incrementQuantity() {
     if (_quantityNotifier.value >= calculateStockInUse(widget.productModel)) {
       // Optional: Provide feedback if the condition is not met
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              'No puedes exeder el total de ${widget.productModel.name} disponibles')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'No puedes exeder el total de ${widget.productModel.name} disponibles')),
+      );
+      return;
     } else {
       // Check the condition before incrementing
       _quantityNotifier.value++;
@@ -124,7 +129,7 @@ class _ProductTileState extends State<ProductTile> {
 
   int calculateStockInUse(ProductModel productModel) {
     if (productModel.datesUsed != null) {
-      final now = DateTime.now();
+      final now = widget.dateSelected;
       final totalBorrowed = productModel.datesUsed!
           .where((element) => isDateInRange(now, element.start!, element.end!))
           .fold<int>(0, (sum, element) => sum + (element.borrowQuantity ?? 0));

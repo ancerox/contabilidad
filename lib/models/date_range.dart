@@ -1,16 +1,16 @@
 class DateRange {
   DateTime? start;
   DateTime? end;
-  int? orderId;
+  String? id;
   int? borrowQuantity; // Add borrowQuantity to DateRange
 
-  DateRange({this.start, this.end, this.orderId, this.borrowQuantity});
+  DateRange({this.start, this.end, this.id, this.borrowQuantity});
 
   Map<String, dynamic> toMap() {
     return {
       'start': start?.toIso8601String(),
       'end': end?.toIso8601String(),
-      'orderId': orderId,
+      'id': id,
       'borrowQuantity': borrowQuantity, // Include borrowQuantity in toMap
     };
   }
@@ -19,23 +19,28 @@ class DateRange {
     return DateRange(
       start: map['start'] != null ? DateTime.parse(map['start']) : null,
       end: map['end'] != null ? DateTime.parse(map['end']) : null,
-      orderId: map['orderId'],
+      id: map['id'],
       borrowQuantity:
           map['borrowQuantity'], // Include borrowQuantity in fromMap
     );
   }
 
-  DateRange copyWith({int? borrowQuantity}) {
+  DateRange copyWith(
+      {String? id,
+      DateTime? start,
+      DateTime? end,
+      int? orderId,
+      int? borrowQuantity}) {
     return DateRange(
-      start: start,
-      end: end,
-      orderId: orderId,
+      id: id ?? this.id,
+      start: start ?? this.start,
+      end: end ?? this.end,
       borrowQuantity: borrowQuantity ?? this.borrowQuantity,
     );
   }
 
   @override
   String toString() {
-    return 'DateRange(start: ${start?.toIso8601String()}, end: ${end?.toIso8601String()}, orderId: $orderId, borrowQuantity: $borrowQuantity)';
+    return 'DateRange(start: ${start?.toIso8601String()}, end: ${end?.toIso8601String()}, id: $id, borrowQuantity: $borrowQuantity)';
   }
 }

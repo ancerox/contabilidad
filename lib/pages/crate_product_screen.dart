@@ -110,7 +110,8 @@ class _CreateProductPageState extends State<CreateProductPage> {
     if (widget.isEditPage && widget.product != null) {
       databaseProvider.selectedProductsNotifier = products;
       dateRanges = widget.product!.datesNotAvailable!;
-      databaseProvider.selectedCommodities.value = widget.product!.subProduct!;
+      databaseProvider.selectedCommodities =
+          ValueNotifier(widget.product!.subProduct!);
       _nameController.text = widget.product!.name;
       _costController.text = widget.product!.cost.toString();
       _amountController.text = widget.product!.amount.toString();

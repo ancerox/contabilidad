@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
 import 'package:file_picker/file_picker.dart';
@@ -14,6 +15,9 @@ import 'package:sqflite/sqflite.dart';
 class DataBase extends ChangeNotifier {
   ValueNotifier<double> totalPriceNotifier = ValueNotifier<double>(0);
   ValueNotifier<int> quantityNotifier = ValueNotifier(0);
+  ValueNotifier<DateRange> dateRange = ValueNotifier(DateRange());
+
+  Map<String, DateRange> dateRangeMap = {};
 
   ValueNotifier<List<ProductModel>> selectedProductsNotifier =
       ValueNotifier<List<ProductModel>>([]);
