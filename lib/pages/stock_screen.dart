@@ -337,9 +337,9 @@ class _StockScreenState extends State<StockScreen> {
                                                   const SizedBox(width: 8),
                                                   Row(
                                                     children: [
-                                                      isCurrentDateOutsideRanges(
-                                                              product
-                                                                  .datesNotAvailable!)
+                                                      calculateStockInUse(
+                                                                  product) >
+                                                              0
                                                           ? const Icon(
                                                               Icons
                                                                   .check_circle,
@@ -361,9 +361,9 @@ class _StockScreenState extends State<StockScreen> {
                                                             .ellipsis,
                                                         style: TextStyle(
                                                           fontSize: 18,
-                                                          color: isCurrentDateOutsideRanges(
-                                                                  product
-                                                                      .datesNotAvailable!)
+                                                          color: calculateStockInUse(
+                                                                      product) >
+                                                                  0
                                                               ? Colors.green
                                                               : Colors.red,
                                                         ),
@@ -418,10 +418,18 @@ class _StockScreenState extends State<StockScreen> {
     );
   }
 
+  bool isSameDay(DateTime date1, DateTime date2) {
+    return date1.day == date2.day &&
+        date1.month == date2.month &&
+        date1.year == date2.year;
+  }
+
   bool isDateInRange(DateTime date, DateTime start, DateTime end) {
-    return date.isAfter(start) && date.isBefore(end) ||
-        date.isAtSameMomentAs(start) ||
-        date.isAtSameMomentAs(end);
+    DateTime dateOnly = DateTime(date.year, date.month, date.day);
+    DateTime startOnly = DateTime(start.year, start.month, start.day);
+    DateTime endOnly = DateTime(end.year, end.month, end.day);
+
+    return isSameDay(dateOnly, startOnly) || isSameDay(dateOnly, endOnly);
   }
 
   int calculateStockInUse(ProductModel productModel) {
@@ -566,3 +574,18 @@ class OutOfStockScreen extends StatelessWidget {
     );
   }
 }
+
+
+    //  itemCount: widget.isEditPage
+    //                                 ? dataBaseProvider
+    //                                     .selectedProductsNotifier.value.length
+    //                                 : filteredProducts.length,
+    //                             itemBuilder: (context, index) {
+    //                               const uuid = Uuid();
+    //                               ProductModel product =
+    //                                   filteredProducts[index];
+
+    //                               if (widget.isEditPage == true) {
+    //                                 product = dataBaseProvider
+    //                                     .selectedProductsNotifier.value[index];
+    //                               }

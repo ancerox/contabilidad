@@ -10,12 +10,16 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 class OrderCreatedScreen extends StatefulWidget {
+  final int orderNumber;
+  final double totalPrice;
   final List<DateRange> markedDays;
   final OrderModel orderModel;
   final List<ProductModel> productModelList;
 
   const OrderCreatedScreen(
       {super.key,
+      required this.totalPrice,
+      required this.orderNumber,
       required this.orderModel,
       required this.productModelList,
       required this.markedDays});
@@ -35,18 +39,18 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    double totalPrice = 0.0;
+    // double totalPrice = 0.0;
 
-    for (var product in widget.productModelList) {
-      if (product.datesUsed != null && product.datesUsed!.isNotEmpty) {
-        int totalDays = product.datesUsed!.fold(0, (int sum, DateRange range) {
-          return sum + (range.end!.difference(range.start!).inDays + 1);
-        });
-        totalPrice += totalDays * product.unitPrice;
-      } else {
-        totalPrice += product.unitPrice * product.quantity!.value;
-      }
-    }
+    // for (var product in widget.productModelList) {
+    //   if (widget.markedDays.isNotEmpty) {
+    //     int totalDays = widget.markedDays.fold(0, (int sum, DateRange range) {
+    //       return sum + (range.end!.difference(range.start!).inDays + 1);
+    //     });
+    //     totalPrice += totalDays * product.unitPrice;
+    //   } else {
+    //     totalPrice += product.unitPrice * product.quantity!.value;
+    //   }
+    // }
 
     ThemeData theme = Theme.of(context);
     return Scaffold(
@@ -78,7 +82,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     children: [
                       _buildHeaderDetail(
                           'ID del Pedido:',
-                          widget.orderModel.id?.toString() ?? "No disponible",
+                          widget.orderNumber.toString() ?? "No disponible",
                           Icons.confirmation_num),
                       _buildHeaderDetail('Cliente:',
                           widget.orderModel.clientName, Icons.person),
@@ -94,7 +98,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                           Icons.date_range),
                       _buildHeaderDetail(
                           'Precio Total:',
-                          '\$${totalPrice.toStringAsFixed(2)}',
+                          '\$${widget.totalPrice.toStringAsFixed(2)}',
                           Icons.attach_money,
                           isTotal: true),
                     ],
@@ -160,6 +164,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                       await dataBaseProvider.createOrderWithProducts(
                           widget.orderModel, widget.productModelList);
                       dataBaseProvider.selectedProductsNotifier.value = [];
+                      dataBaseProvider.dateRangeMap.clear();
                       Navigator.push(context,
                           MaterialPageRoute(builder: (_) => HomePage()));
                       return;
@@ -193,17 +198,29 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
   }
 
   String _buildRentalProductSubtitle(ProductModel product) {
-    int totalDays = product.datesUsed!.fold(0, (int sum, DateRange range) {
-      return sum + (range.end!.difference(range.start!).inDays + 1);
-    });
+    // Retrieve the last DateRange from product.datesUsed
+    DateRange lastDateRange = product.datesUsed!.last;
+
+    // Calculate total days in the last DateRange
+    int totalDays =
+        lastDateRange.end!.difference(lastDateRange.start!).inDays + 1;
+
+    // Calculate the total rental cost based on total days and unit price
+
+    // Build the subtitle string
     return 'Días: $totalDays x \$${product.unitPrice.toStringAsFixed(2)} (por día)';
   }
 
   double _calculateTotalRentalPrice(ProductModel product) {
-    int totalDays = product.datesUsed!.fold(0, (int sum, DateRange range) {
-      return sum + (range.end!.difference(range.start!).inDays + 1);
-    });
-    return totalDays * product.unitPrice;
+    // Retrieve the last DateRange from product.datesUsed
+    DateRange lastDateRange = product.datesUsed!.last;
+
+    // Calculate total days in the last DateRange
+    int totalDays =
+        lastDateRange.end!.difference(lastDateRange.start!).inDays + 1;
+
+    // Calculate the total rental price based on total days and unit price
+    return totalDays * product.unitPrice * product.quantity!.value;
   }
 
   String _formatDatesUsed() {
@@ -215,7 +232,12 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
       return widget.orderModel.date;
     }
 
-    final formattedDates = datesUsed.map((dateRange) {
+    // Ensure only the last two DateRanges are considered
+    final lastTwoDates = datesUsed.length >= 2
+        ? datesUsed.sublist(datesUsed.length - 2)
+        : datesUsed;
+
+    final formattedDates = lastTwoDates.map((dateRange) {
       final start = dateRange.start != null
           ? DateFormat('MM/dd/yyyy').format(dateRange.start!)
           : 'N/A';

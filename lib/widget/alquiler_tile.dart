@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/product_model.dart';
 import 'package:flutter/material.dart';
 
 class ProductTile extends StatefulWidget {
+  final Map<int, List<DateRange>> productDateRanges;
   final DateTime dateSelected;
   final ProductModel productModel;
   final String imagePath;
@@ -12,6 +14,7 @@ class ProductTile extends StatefulWidget {
   final int initialQuantity;
 
   const ProductTile({
+    required this.productDateRanges,
     required this.dateSelected,
     required this.productModel,
     super.key,
@@ -34,8 +37,8 @@ class _ProductTileState extends State<ProductTile> {
   void initState() {
     super.initState();
     _quantityNotifier.value = widget.initialQuantity;
-    _controller =
-        TextEditingController(text: _quantityNotifier.value.toString());
+    _controller = TextEditingController(
+        text: widget.productModel.quantity!.value.toString());
   }
 
   @override
@@ -46,6 +49,14 @@ class _ProductTileState extends State<ProductTile> {
   }
 
   void _incrementQuantity() {
+    if (widget.productDateRanges[widget.productModel.id] == null ||
+        widget.productDateRanges[widget.productModel.id]!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor eliga primero un fecha')),
+      );
+      return;
+    }
+
     if (_quantityNotifier.value >= calculateStockInUse(widget.productModel)) {
       // Optional: Provide feedback if the condition is not met
       ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +117,10 @@ class _ProductTileState extends State<ProductTile> {
             child: ValueListenableBuilder<int>(
               valueListenable: _quantityNotifier,
               builder: (context, quantity, child) {
+                if (_controller.text.isEmpty || _controller.text == "0") {
+                  _controller =
+                      TextEditingController(text: quantity.toString());
+                }
                 return TextFormField(
                   controller: _controller,
                   keyboardType: TextInputType.number,
@@ -140,9 +155,19 @@ class _ProductTileState extends State<ProductTile> {
     return productModel.amount;
   }
 
+  bool isSameDay(DateTime date1, DateTime date2) {
+    return date1.day == date2.day &&
+        date1.month == date2.month &&
+        date1.year == date2.year;
+  }
+
   bool isDateInRange(DateTime date, DateTime start, DateTime end) {
-    return date.isAfter(start) && date.isBefore(end) ||
-        date.isAtSameMomentAs(start) ||
-        date.isAtSameMomentAs(end);
+    DateTime dateOnly = DateTime(date.year, date.month, date.day);
+    DateTime startOnly = DateTime(start.year, start.month, start.day);
+    DateTime endOnly = DateTime(end.year, end.month, end.day);
+
+    return (dateOnly.isAfter(startOnly) && dateOnly.isBefore(endOnly)) ||
+        isSameDay(dateOnly, startOnly) ||
+        isSameDay(dateOnly, endOnly);
   }
 }
