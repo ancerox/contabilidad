@@ -124,6 +124,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   @override
   void dispose() {
+    dataBaseProvider.selectedCommodities.value.clear();
     dataBaseProvider.dateRangeMap.clear();
     dataBaseProvider.selectedProductsNotifier.value.clear();
     _unitPriceControllers.forEach((_, controller) => controller.dispose());
@@ -217,20 +218,20 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       final listProducts = dataBaseProvider.selectedProductsNotifier.value;
       final order = OrderModel(
-        datesInUse: productDateRanges.values.expand((e) => e).toList(),
-        pagos: pagos,
-        productList: listProducts,
-        orderNumber: newOrderNumber.toString(),
-        totalOwned: totalOwnedGlobal,
-        margen: margin.toString(),
-        status: "pendiente",
-        clientName: _nameController.text,
-        celNumber: _cellController.text,
-        direccion: _directionController.text,
-        date: _dateController.text,
-        comment: _commnetController.text,
-        totalCost: double.parse(_totalController.text),
-      );
+          adminExpenses: dataBaseProvider.selectedCommodities.value,
+          datesInUse: productDateRanges,
+          pagos: pagos,
+          productList: listProducts,
+          orderNumber: newOrderNumber.toString(),
+          totalOwned: totalOwnedGlobal,
+          margen: margin.toString(),
+          status: "pendiente",
+          clientName: _nameController.text,
+          celNumber: _cellController.text,
+          direccion: _directionController.text,
+          date: _dateController.text,
+          comment: _commnetController.text,
+          totalCost: dataBaseProvider.totalPriceNotifier.value);
 
       if (widget.isEditPage && widget.order != null) {
         order.id = orderId;
@@ -242,12 +243,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         Navigator.pop(context, true);
         return;
       } else {
+        final earningsCommodities = dataBaseProvider.selectedCommodities.value
+            .fold(0.0, (sum, product) {
+          return sum + (product.unitPrice * product.quantity!.value);
+        });
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => OrderCreatedScreen(
+              totalOwned: totalOwnedGlobal,
               orderNumber: _orderNumber!,
-              totalPrice: dataBaseProvider.totalPriceNotifier.value,
+              totalPrice: dataBaseProvider.totalPriceNotifier.value +
+                  earningsCommodities,
               markedDays: productDateRanges.values.expand((e) => e).toList(),
               orderModel: order,
               productModelList: listProducts,
@@ -283,6 +290,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     orderId = widget.order!.id;
     dataBaseProvider.selectedProductsNotifier.value =
         widget.order!.productList!;
+    dataBaseProvider.selectedCommodities.value = widget.order!.adminExpenses!;
+    _calculateTotalPrice();
+// widget.order!.datesInUse
     pagos = widget.order!.pagos;
     grantTotalOwned = pagos.fold(0, (sum, pago) => sum + pago.amount.toInt());
     _nameController.text = widget.order!.clientName;
@@ -750,7 +760,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    Text('Ordern #$_orderNumber',
+                    Text(
+                        'Ordern #${widget.isEditPage ? widget.order!.id : _orderNumber}',
                         style: const TextStyle(color: Colors.grey)),
                     const SizedBox(height: 20),
                     const Text('Información contacto',
@@ -1142,10 +1153,21 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                                   .fold(0.0, (sum,
                                                                       product) {
                                                                 return sum +
-                                                                    (product.unitPrice -
+                                                                    (product.unitPrice *
                                                                         product
-                                                                            .cost);
-                                                              });
+                                                                            .quantity!
+                                                                            .value);
+                                                              }) -
+                                                              dataBaseProvider
+                                                                  .selectedCommodities
+                                                                  .value
+                                                                  .fold(
+                                                                      0.0,
+                                                                      (previousValue,
+                                                                              element) =>
+                                                                          previousValue +
+                                                                          (element.cost *
+                                                                              element.quantity!.value));
 
                                                       final otherTotal =
                                                           selectedProducts.fold(
@@ -1337,7 +1359,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                             .fold(0.0,
                                                                 (sum, product) {
                                                       return sum +
-                                                          (product.unitPrice);
+                                                          (product.unitPrice *
+                                                              product.quantity!
+                                                                  .value);
                                                     });
                                                     final totalOwnedOrder =
                                                         productDateRanges
@@ -1885,6 +1909,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
   @override
   void initState() {
     super.initState();
+
     _searchController = TextEditingController();
     _searchController.addListener(() {
       _searchTextNotifier.value = _searchController.text;
@@ -1892,6 +1917,16 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
 
     dataBaseProvider.totalPriceNotifier = _totalPriceNotifier;
+    if (widget.isEditPage) {
+      print("testoy");
+      _updateTotalPrice();
+      for (var element in dataBaseProvider.selectedProductsNotifier.value) {
+        _handleQuantityChanged(element.name, element.quantity!.value);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {});
+      });
+    }
   }
 
   @override
@@ -2054,9 +2089,6 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                             productDateRanges:
                                                 widget.productDateRanges,
                                             onQuantityChanged: (quantity) {
-                                              print(
-                                                  " gtg43 ${dataBaseProvider.dateRangeMap}");
-
                                               // Get the current list of selected products
                                               List<ProductModel> currentList =
                                                   dataBaseProvider
@@ -2177,17 +2209,17 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                     newDateRange
                                                   ];
                                                   currentList.add(product);
-                                                  dataBaseProvider
-                                                      .selectedProductsNotifier
-                                                      .value = currentList;
+                                                  // dataBaseProvider
+                                                  //     .selectedProductsNotifier
+                                                  //     .value = currentList;
 
-                                                  // Add to dateRangeMap
-                                                  dataBaseProvider.dateRangeMap[
-                                                          newDateRange.id!] =
-                                                      newDateRange;
+                                                  // // Add to dateRangeMap
+                                                  // dataBaseProvider.dateRangeMap[
+                                                  //         newDateRange.id!] =
+                                                  //     newDateRange;
 
-                                                  _handleQuantityChanged(
-                                                      product.name, quantity);
+                                                  // _handleQuantityChanged(
+                                                  //     product.name, quantity);
                                                 }
                                               }
                                             },
@@ -2660,11 +2692,14 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                                 .fold(0.0, (sum,
                                                                     product) {
                                                           return sum +
-                                                              (product
-                                                                  .unitPrice);
+                                                              (product.unitPrice *
+                                                                  product
+                                                                      .quantity!
+                                                                      .value);
                                                         });
+
                                                         return Text(
-                                                          "\$${totalPrice + earningsCommodities}",
+                                                          "\$${totalPrice + earningsCommodities} ",
                                                           style: TextStyle(
                                                             fontSize: 20,
                                                             fontWeight:

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
@@ -105,6 +107,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           final List<ProductModel> products =
                               order.productList ?? [];
                           return InvoiceWidget(
+                              dataBase: dataBase,
                               order: order,
                               products: products,
                               onOrderUpdated: _refreshOrders);
@@ -208,6 +211,7 @@ class _FilterButton extends StatelessWidget {
 }
 
 class InvoiceWidget extends StatefulWidget {
+  final DataBase dataBase;
   final OrderModel order;
   final List<ProductModel> products;
   final VoidCallback onOrderUpdated;
@@ -216,7 +220,8 @@ class InvoiceWidget extends StatefulWidget {
       {super.key,
       required this.order,
       required this.products,
-      required this.onOrderUpdated});
+      required this.onOrderUpdated,
+      required this.dataBase});
 
   @override
   State<InvoiceWidget> createState() => _InvoiceWidgetState();
@@ -259,8 +264,15 @@ class _InvoiceWidgetState extends State<InvoiceWidget> {
         child: Column(
           children: [
             HeaderSection(order: widget.order),
-            ItemListSection(products: widget.products),
-            TotalSection(order: widget.order, products: widget.products),
+            ItemListSection(
+              products: widget.products,
+              order: widget.order,
+            ),
+            TotalSection(
+              order: widget.order,
+              products: widget.products,
+              dataBase: widget.dataBase,
+            ),
             if (widget.order.pagos.isNotEmpty)
               PaymentSection(pagos: widget.order.pagos),
           ],
@@ -295,8 +307,8 @@ class HeaderSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('#A83940',
-                    style: TextStyle(
+                Text('#${order.orderNumber}',
+                    style: const TextStyle(
                         fontWeight: FontWeight.bold, color: Colors.white)),
                 Container(
                   height: 25,
@@ -337,8 +349,9 @@ class HeaderSection extends StatelessWidget {
 
 class ItemListSection extends StatelessWidget {
   final List<ProductModel> products;
-
-  const ItemListSection({super.key, required this.products});
+  final OrderModel order;
+  const ItemListSection(
+      {super.key, required this.products, required this.order});
 
   @override
   Widget build(BuildContext context) {
@@ -348,8 +361,10 @@ class ItemListSection extends StatelessWidget {
       ),
       child: Column(
         children: [
+          TotalRow(label: 'Total Adeudado', amount: order.totalOwned),
           for (var product in products)
             ItemRow(
+              image: product.file!,
               title: product.name,
               quantity: product.quantity!.value,
               cost: product.cost,
@@ -362,6 +377,7 @@ class ItemListSection extends StatelessWidget {
 }
 
 class ItemRow extends StatelessWidget {
+  final String image;
   final String title;
   final int quantity;
   final double cost;
@@ -370,6 +386,7 @@ class ItemRow extends StatelessWidget {
   const ItemRow({
     super.key,
     required this.title,
+    required this.image,
     required this.quantity,
     required this.cost,
     required this.unit,
@@ -383,7 +400,25 @@ class ItemRow extends StatelessWidget {
         children: [
           const SizedBox(width: 8.0),
           Text('$quantity  '),
-          Flexible(child: Text("$title $unit")),
+          const Text('x '),
+          CircleAvatar(
+            radius: 12, // Ajusta el radio para que el círculo sea más grande
+            backgroundColor: Colors.orangeAccent[300],
+            child: Container(
+              width: 9, // Ajusta el ancho del contenedor
+              height: 9, // Ajusta la altura del contenedor
+              decoration: BoxDecoration(
+                shape: BoxShape
+                    .circle, // Asegúrate de que el contenedor tenga forma circular
+                image: DecorationImage(
+                  fit: BoxFit
+                      .cover, // Asegúrate de que la imagen cubra todo el contenedor
+                  image: FileImage(File(image)),
+                ),
+              ),
+            ),
+          ),
+          Flexible(child: Text(" $title $unit")),
         ],
       ),
     );
@@ -391,20 +426,37 @@ class ItemRow extends StatelessWidget {
 }
 
 class TotalSection extends StatelessWidget {
+  final DataBase dataBase;
   final List<ProductModel> products;
   final OrderModel order;
 
-  const TotalSection({super.key, required this.order, required this.products});
+  const TotalSection(
+      {super.key,
+      required this.order,
+      required this.products,
+      required this.dataBase});
 
   @override
   Widget build(BuildContext context) {
+    int totalCost = order.productList!.fold(
+        0,
+        (int sum, ProductModel product) =>
+            sum + product.cost.toInt() * product.quantity!.value);
+    int adminCost = order.adminExpenses!.fold(
+        0,
+        (int sum, ProductModel product) =>
+            sum + product.cost.toInt() * product.quantity!.value);
+
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xffA338FF), width: 0.4),
       ),
       child: Column(
         children: [
-          TotalRow(label: 'Costo total', amount: '\$${order.totalCost}'),
+          TotalRow(label: 'Costo total', amount: '\$$totalCost'),
+          TotalRow(label: 'Precio total', amount: '\$${order.totalCost}'),
+          TotalRow(label: 'Margen', amount: '\$${order.totalCost - totalCost}'),
+          TotalRow(label: 'Costos administrativos', amount: '\$$adminCost'),
         ],
       ),
     );
@@ -457,10 +509,15 @@ class PaymentSection extends StatelessWidget {
 
   String _formatDate(String date) {
     try {
-      return DateFormat('dd MMMM yyyy').format(DateTime.parse(date));
+      // Establecer la localización a español
+      Intl.defaultLocale = 'es_ES';
+      // Analizar la fecha con el formato especificado
+      DateTime parsedDate = DateFormat('MM/dd/yyyy').parse(date);
+      // Formatear la fecha como "dd MMMM yyyy" en español
+      return DateFormat('dd MMMM yyyy', 'es_ES').format(parsedDate);
     } catch (e) {
-      // Handle the error by returning a default or error message
-      return 'Invalid date';
+      // Manejar el error devolviendo un mensaje por defecto o de error
+      return 'Fecha inválida';
     }
   }
 }

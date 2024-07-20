@@ -136,7 +136,10 @@ class InvoiceWidgetInvoice extends StatelessWidget {
       child: Column(
         children: [
           HeaderSection(order: order),
-          ItemListSection(products: products),
+          ItemListSection(
+            products: products,
+            order: order,
+          ),
           TotalSectionPendding(
               order: order, products: products, onRefresh: onRefresh),
           // const PaymentSection(),

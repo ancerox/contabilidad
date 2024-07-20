@@ -86,6 +86,8 @@ class _CreateProductPageState extends State<CreateProductPage> {
 
   @override
   void dispose() {
+    databaseProvider.selectedCommodities.value.clear();
+    databaseProvider.selectedProductsNotifier.value.clear();
     _nameController.dispose();
     databaseProvider.selectedCommodities.value.clear();
     _costController.dispose();
@@ -144,7 +146,9 @@ class _CreateProductPageState extends State<CreateProductPage> {
       final product = ProductModel(
           id: widget.product?.id, // Make sure to handle the ID appropriately
           name: _nameController.text,
-          cost: double.tryParse(_costController.text) ?? 0.0,
+          cost: _costController.text.isEmpty
+              ? 0.0
+              : double.tryParse(_costController.text) ?? 0,
           amount: int.tryParse(_amountController.text) ?? 0,
           unitPrice: double.tryParse(_unitPriceController.text) ?? 0.0,
           unit: _selectedUnit ?? 'Unidad',
@@ -170,7 +174,8 @@ class _CreateProductPageState extends State<CreateProductPage> {
           const SnackBar(content: Text('Producto agregado con éxito')),
         );
       }
-
+      databaseProvider.selectedCommodities.value.clear();
+      databaseProvider.selectedProductsNotifier.value.clear();
       // Clear form and exit the page or reset the state as needed
       Navigator.pop(context);
     }

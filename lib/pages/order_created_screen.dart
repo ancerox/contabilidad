@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 class OrderCreatedScreen extends StatefulWidget {
+  final String totalOwned;
   final int orderNumber;
   final double totalPrice;
   final List<DateRange> markedDays;
@@ -18,6 +19,7 @@ class OrderCreatedScreen extends StatefulWidget {
 
   const OrderCreatedScreen(
       {super.key,
+      required this.totalOwned,
       required this.totalPrice,
       required this.orderNumber,
       required this.orderModel,
@@ -92,9 +94,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                           widget.orderModel.direccion, Icons.location_on),
                       _buildHeaderDetail(
                           'Fecha:', _formatDatesUsed(), Icons.date_range),
-                      _buildHeaderDetail(
-                          'Total Adeudado:',
-                          widget.orderModel.totalOwned.toString(),
+                      _buildHeaderDetail('Total Adeudado:', widget.totalOwned,
                           Icons.date_range),
                       _buildHeaderDetail(
                           'Precio Total:',
@@ -105,6 +105,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 20),
               Text('Productos:', style: theme.textTheme.titleLarge),
               ...widget.productModelList.map((product) => Card(
@@ -131,6 +132,37 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                       ),
                     ),
                   )),
+              const SizedBox(
+                height: 10,
+              ),
+              if (dataBaseProvider.selectedCommodities.value.isNotEmpty)
+                Text('Costos adicionales:', style: theme.textTheme.titleLarge),
+              if (dataBaseProvider.selectedCommodities.value.isNotEmpty)
+                ...dataBaseProvider.selectedCommodities.value
+                    .map((product) => Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListTile(
+                            leading: Icon(Icons.shopping_cart,
+                                color: theme.primaryColor),
+                            title: Text(
+                                "${product.quantity!.value} ${product.unit.toLowerCase()} x ${product.name}"),
+                            subtitle: product.datesUsed != null &&
+                                    product.datesUsed!.isNotEmpty
+                                ? Text(_buildRentalProductSubtitle(product))
+                                : Text(
+                                    'Cantidad: ${product.quantity!.value} x \$${product.unitPrice.toStringAsFixed(2)} (cada uno)'),
+                            trailing: Text(
+                              product.datesUsed != null &&
+                                      product.datesUsed!.isNotEmpty
+                                  ? '\$${_calculateTotalRentalPrice(product).toStringAsFixed(2)}'
+                                  : '\$${(product.quantity!.value * product.unitPrice).toStringAsFixed(2)}',
+                            ),
+                          ),
+                        )),
               if (widget.orderModel.comment.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
@@ -160,11 +192,12 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                   ),
                   onPressed: () async {
                     if (widget.orderModel.productList!
-                        .any((element) => element.datesUsed!.isNotEmpty)) {
+                        .any((element) => element.datesUsed != null)) {
                       await dataBaseProvider.createOrderWithProducts(
                           widget.orderModel, widget.productModelList);
                       dataBaseProvider.selectedProductsNotifier.value = [];
                       dataBaseProvider.dateRangeMap.clear();
+                      dataBaseProvider.selectedCommodities.value.clear();
                       Navigator.push(context,
                           MaterialPageRoute(builder: (_) => HomePage()));
                       return;
@@ -189,7 +222,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),

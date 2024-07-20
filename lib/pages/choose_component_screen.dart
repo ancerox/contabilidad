@@ -134,26 +134,27 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
 
                               if (dabataseProvider
                                   .selectedCommodities.value.isNotEmpty) {
-                                // Set<ProductModel> resultSet =
-                                //     Set<ProductModel>.from(listProducts);
-
-                                // // Add all elements from list2. The set will automatically avoid duplicates.
-                                // resultSet.addAll(products);
-                                Map<ProductModel, ProductModel> map = {
-                                  for (var item in products) item: item
+                                // Create a Map with product IDs as keys and products as values
+                                Map<int, ProductModel> productMap = {
+                                  for (var item in products) item.id!: item
                                 };
 
+                                // Update the map with selected commodities, replacing existing items with the same ID
                                 for (var item in dabataseProvider
                                     .selectedCommodities.value) {
-                                  map[item] =
-                                      item; // This replaces if the item already exists, adds if it doesn't
+                                  productMap[item.id!] = item;
                                 }
+
+                                // Convert the map values back to a list
                                 List<ProductModel> mixedList =
-                                    map.values.toList();
+                                    productMap.values.toList();
+
+                                // Update the products list
                                 products = mixedList;
                                 componetsProducts =
                                     dabataseProvider.selectedCommodities.value;
                               }
+
                               products = products.where((product) {
                                 return product.name
                                     .toLowerCase()

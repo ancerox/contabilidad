@@ -33,17 +33,19 @@ class OrderModel {
   final String celNumber;
   final String direccion;
   final List<ProductModel>? productList;
+  final List<ProductModel>? adminExpenses;
   final String date;
   final String comment;
   final double totalCost;
   final String status;
   final List<PagoModel> pagos;
-  List<DateRange>? datesInUse;
+  Map<int, List<DateRange>>? datesInUse;
 
   OrderModel({
     required this.pagos,
     this.id,
     this.orderNumber,
+    this.adminExpenses,
     required this.totalOwned,
     required this.margen,
     required this.status,
@@ -70,6 +72,18 @@ class OrderModel {
       }
     }
 
+    List<ProductModel> adminExpenses = [];
+    if (map['adminExpenses'] != null) {
+      try {
+        Iterable l = json.decode(map['adminExpenses']);
+        adminExpenses = List<ProductModel>.from(
+          l.map((model) => ProductModel.fromMap(model)),
+        );
+      } catch (e) {
+        print('Error decoding adminExpenses: $e');
+      }
+    }
+
     List<PagoModel> pagosList = [];
     if (map['pagos'] != null) {
       try {
@@ -82,13 +96,17 @@ class OrderModel {
       }
     }
 
-    List<DateRange>? datesInUse;
+    Map<int, List<DateRange>>? datesInUse;
     if (map['datesInUse'] != null) {
       try {
-        Iterable l = json.decode(map['datesInUse']);
-        datesInUse = List<DateRange>.from(
-          l.map((range) => DateRange.fromMap(range)),
-        );
+        Map<String, dynamic> datesInUseMap = json.decode(map['datesInUse']);
+        datesInUse = datesInUseMap.map((key, value) {
+          int intKey = int.parse(key);
+          List<DateRange> ranges = List<DateRange>.from(
+            value.map((range) => DateRange.fromMap(range)),
+          );
+          return MapEntry(intKey, ranges);
+        });
       } catch (e) {
         print('Error decoding datesInUse: $e');
       }
@@ -105,6 +123,7 @@ class OrderModel {
       celNumber: map['celNumber'],
       direccion: map['direccion'],
       productList: productList,
+      adminExpenses: adminExpenses,
       date: map['date'],
       comment: map['comment'],
       totalCost: map['totalCost'].toDouble(),
@@ -129,8 +148,15 @@ class OrderModel {
       'productList': productList != null
           ? json.encode(productList!.map((product) => product.toMap()).toList())
           : null,
+      'adminExpenses': adminExpenses != null
+          ? json
+              .encode(adminExpenses!.map((expense) => expense.toMap()).toList())
+          : null,
       'datesInUse': datesInUse != null
-          ? json.encode(datesInUse!.map((range) => range.toMap()).toList())
+          ? json.encode(
+              datesInUse!.map((key, value) => MapEntry(key.toString(),
+                  value.map((range) => range.toMap()).toList())),
+            )
           : null,
     };
   }
@@ -144,14 +170,16 @@ class OrderModel {
     String? celNumber,
     String? direccion,
     List<ProductModel>? productList,
+    List<ProductModel>? adminExpenses,
     String? date,
     String? comment,
     double? totalCost,
     String? status,
     List<PagoModel>? pagos,
-    List<DateRange>? datesInUse,
+    Map<int, List<DateRange>>? datesInUse,
   }) {
     return OrderModel(
+      adminExpenses: adminExpenses ?? this.adminExpenses,
       orderNumber: orderNumber ?? this.orderNumber,
       totalOwned: totalOwned ?? this.totalOwned,
       margen: margen ?? this.margen,
