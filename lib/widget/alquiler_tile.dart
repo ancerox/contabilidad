@@ -1,10 +1,13 @@
 import 'dart:io';
 
+import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/product_model.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class ProductTile extends StatefulWidget {
+  final bool isEditPage;
   final Map<int, List<DateRange>> productDateRanges;
   final DateTime dateSelected;
   final ProductModel productModel;
@@ -14,6 +17,7 @@ class ProductTile extends StatefulWidget {
   final int initialQuantity;
 
   const ProductTile({
+    required this.isEditPage,
     required this.productDateRanges,
     required this.dateSelected,
     required this.productModel,
@@ -32,10 +36,12 @@ class _ProductTileState extends State<ProductTile> {
   late TextEditingController _controller;
   final ValueNotifier<int> _quantityNotifier = ValueNotifier<int>(0);
   bool isConditionMet = false; // This is the condition variable
+  late DataBase databaseProvider;
 
   @override
   void initState() {
     super.initState();
+    databaseProvider = Provider.of<DataBase>(context, listen: false);
     _quantityNotifier.value = widget.initialQuantity;
     _controller = TextEditingController(
         text: widget.productModel.quantity!.value.toString());
@@ -137,6 +143,12 @@ class _ProductTileState extends State<ProductTile> {
             icon: const Icon(Icons.add),
             onPressed: _incrementQuantity,
           ),
+          _quantityNotifier.value > 0
+              ? const Icon(
+                  Icons.check,
+                  color: Colors.green,
+                )
+              : Container()
         ],
       ),
     );
@@ -145,11 +157,18 @@ class _ProductTileState extends State<ProductTile> {
   int calculateStockInUse(ProductModel productModel) {
     if (productModel.datesUsed != null) {
       final now = widget.dateSelected;
+
+      // Create a set of IDs to exclude based on the dateRangeMap
+      final excludedIds = databaseProvider.dateRangeMap.keys.toSet();
+
       final totalBorrowed = productModel.datesUsed!
-          .where((element) => isDateInRange(now, element.start!, element.end!))
+          .where((element) =>
+              !excludedIds.contains(element.id) &&
+              isDateInRange(now, element.start!, element.end!))
           .fold<int>(0, (sum, element) => sum + (element.borrowQuantity ?? 0));
 
       final availableStock = productModel.amount - totalBorrowed;
+
       return availableStock;
     }
     return productModel.amount;

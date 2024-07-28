@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:contabilidad/database/database.dart';
+import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
 import 'package:contabilidad/pages/create_order.dart';
@@ -241,9 +242,9 @@ class _InvoiceWidgetState extends State<InvoiceWidget> {
                       isEditPage: true,
                     ),
                   )).then((value) {
-                if (value != null && value) {
-                  widget.onOrderUpdated();
-                }
+                print("$value TESTIol");
+
+                widget.onOrderUpdated();
               });
             }
           : null,
@@ -307,7 +308,7 @@ class HeaderSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('#${order.orderNumber}',
+                Text('#${order.id}',
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, color: Colors.white)),
                 Container(
@@ -441,11 +442,20 @@ class TotalSection extends StatelessWidget {
     int totalCost = order.productList!.fold(
         0,
         (int sum, ProductModel product) =>
-            sum + product.cost.toInt() * product.quantity!.value);
+            sum +
+            product.cost.toInt() *
+                product.quantity!.value *
+                getTotalDaysBetweenDates());
     int adminCost = order.adminExpenses!.fold(
         0,
         (int sum, ProductModel product) =>
             sum + product.cost.toInt() * product.quantity!.value);
+    int adminPrice = order.adminExpenses!.fold(
+        0,
+        (int sum, ProductModel product) =>
+            sum + product.unitPrice.toInt() * product.quantity!.value);
+
+    print("TESTOY ${getTotalDaysBetweenDates()}");
 
     return Container(
       decoration: BoxDecoration(
@@ -453,13 +463,32 @@ class TotalSection extends StatelessWidget {
       ),
       child: Column(
         children: [
-          TotalRow(label: 'Costo total', amount: '\$$totalCost'),
-          TotalRow(label: 'Precio total', amount: '\$${order.totalCost}'),
-          TotalRow(label: 'Margen', amount: '\$${order.totalCost - totalCost}'),
+          TotalRow(label: 'Costo total', amount: '\$${totalCost + adminCost}'),
+          TotalRow(
+              label: 'Precio total',
+              amount: '\$${order.totalCost + adminPrice}'),
+          TotalRow(
+              label: 'Margen',
+              amount:
+                  '\$${(order.totalCost - totalCost) + (adminPrice - adminCost)}'),
           TotalRow(label: 'Costos administrativos', amount: '\$$adminCost'),
         ],
       ),
     );
+  }
+
+  int getTotalDaysBetweenDates() {
+    int totalDays = 0;
+    if (order.datesInUse != null && order.datesInUse![1] != null) {
+      for (DateRange dateRange in order.datesInUse![1]!) {
+        if (dateRange.start != null && dateRange.end != null) {
+          int daysBetween =
+              dateRange.end!.difference(dateRange.start!).inDays + 1;
+          totalDays += daysBetween;
+        }
+      }
+    }
+    return totalDays;
   }
 }
 

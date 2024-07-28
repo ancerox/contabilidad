@@ -10,21 +10,26 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 class OrderCreatedScreen extends StatefulWidget {
+  final bool isEditPage;
   final String totalOwned;
   final int orderNumber;
+  final int orderId;
   final double totalPrice;
   final List<DateRange> markedDays;
   final OrderModel orderModel;
   final List<ProductModel> productModelList;
 
-  const OrderCreatedScreen(
-      {super.key,
-      required this.totalOwned,
-      required this.totalPrice,
-      required this.orderNumber,
-      required this.orderModel,
-      required this.productModelList,
-      required this.markedDays});
+  const OrderCreatedScreen({
+    super.key,
+    required this.totalOwned,
+    required this.isEditPage,
+    required this.totalPrice,
+    required this.orderNumber,
+    required this.orderModel,
+    required this.productModelList,
+    required this.markedDays,
+    required this.orderId,
+  });
 
   @override
   State<OrderCreatedScreen> createState() => _OrderCreatedScreenState();
@@ -191,6 +196,20 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     ),
                   ),
                   onPressed: () async {
+                    if (widget.isEditPage) {
+                      await dataBaseProvider.updateOrderWithProducts(
+                          widget.orderId,
+                          widget.orderModel,
+                          widget.productModelList);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Orden actualizada con éxito')),
+                      );
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => HomePage()));
+                      return;
+                    }
+
                     if (widget.orderModel.productList!
                         .any((element) => element.datesUsed != null)) {
                       await dataBaseProvider.createOrderWithProducts(

@@ -21,6 +21,8 @@ class DataBase extends ChangeNotifier {
 
   ValueNotifier<List<ProductModel>> selectedProductsNotifier =
       ValueNotifier<List<ProductModel>>([]);
+  ValueNotifier<List<ProductModel>> selectedProductsProvider =
+      ValueNotifier<List<ProductModel>>([]);
 
   ValueNotifier<List<ProductModel>> selectedCommodities =
       ValueNotifier<List<ProductModel>>([]);
@@ -422,7 +424,6 @@ class DataBase extends ChangeNotifier {
     }
   }
 
-// Function to update an existing order and its associated products in the database
   Future<void> updateOrderWithProducts(int orderId, OrderModel updatedOrder,
       List<ProductModel> updatedProducts) async {
     final db = await getDatabase();
@@ -437,29 +438,16 @@ class DataBase extends ChangeNotifier {
           whereArgs: [orderId],
         );
 
-        // Check if the order is a rental
-        bool isRental = updatedOrder.datesInUse != null;
-
-        // Delete existing product links for this order if it's not a rental
-        if (!isRental) {
-          await txn.delete(
-            'order_products',
-            where: 'orderId = ?',
-            whereArgs: [orderId],
-          );
-        } else {
-          // For rental orders, clear previous entries to avoid duplication
-          await txn.delete(
-            'order_products',
-            where: 'orderId = ?',
-            whereArgs: [orderId],
-          );
-        }
+        // Delete existing product links for this order
+        await txn.delete(
+          'order_products',
+          where: 'orderId = ?',
+          whereArgs: [orderId],
+        );
 
         // Insert updated products
         for (var product in updatedProducts) {
-          var productId = int.tryParse(product.id.toString()) ??
-              0; // Ensure productId is an integer
+          var productId = product.id; // Ensure productId is unique id
           var productQuantity =
               product.quantity?.value ?? 0; // Default quantity to 0 if null
 
@@ -493,7 +481,7 @@ class DataBase extends ChangeNotifier {
       } catch (e, stackTrace) {
         print('Error updating order with products: $e');
         print('Stack trace: $stackTrace');
-        rethrow; // Re-throw the exception to ensure the transaction is rolled back
+        rethrow;
       }
     });
 

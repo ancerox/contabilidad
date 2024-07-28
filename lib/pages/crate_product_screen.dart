@@ -162,6 +162,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
           datesNotAvailable: markdateRanges);
 
       if (widget.isEditPage && widget.product != null) {
+        product.datesUsed = widget.product!.datesUsed;
         // Update existing product
         await databaseProvider.updateProduct(product);
         ScaffoldMessenger.of(context).showSnackBar(
