@@ -14,25 +14,42 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   double? _amount;
-  int passedIndex = 0;
   late DataBase dataBaseProvider;
+  final _searchController = TextEditingController();
   final _controller = TextEditingController();
+  final ValueNotifier<String> selectedItemNotifier =
+      ValueNotifier<String>(''); // Para el filtro seleccionado
 
-  final Map<int, TextEditingController> _costControllers = {};
-  final Map<int, TextEditingController> _quantityControllers = {};
-
-  Map<int, ValueNotifier<int>> productQuantities = {};
+  final Map<String, TextEditingController> _quantityControllers = {};
+  final Map<String, ValueNotifier<int>> productQuantities = {};
+  final Map<String, ValueNotifier<int>> productCosts = {};
   ValueNotifier<bool> isCheckoutButtonEnabled = ValueNotifier(false);
   List<ProductModel> selectedProducts = [];
-  final TextEditingController costCTRController = TextEditingController();
-  final TextEditingController quantityCTRController = TextEditingController();
+  List<ProductModel> allProducts = []; // Lista completa de productos
+  List<ProductModel> filteredProducts = []; // Lista filtrada de productos
 
   @override
   void initState() {
     super.initState();
-
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
     getProducts();
+    _searchController.addListener(_filterProducts);
+    selectedItemNotifier.addListener(
+        _filterProducts); // Escuchar cambios en el filtro seleccionado
+  }
+
+  void _filterProducts() {
+    String query = _searchController.text.toLowerCase();
+    String selectedFilter = selectedItemNotifier.value;
+
+    setState(() {
+      filteredProducts = allProducts.where((product) {
+        final matchesSearchQuery = product.name.toLowerCase().contains(query);
+        final matchesSelectedFilter =
+            selectedFilter.isEmpty || product.productType == selectedFilter;
+        return matchesSearchQuery && matchesSelectedFilter;
+      }).toList();
+    });
   }
 
   void _updateCheckoutButtonState() {
@@ -42,23 +59,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _controller.dispose();
-    _costControllers.forEach((_, controller) => controller.dispose());
     _quantityControllers.forEach((_, controller) => controller.dispose());
+    productQuantities.forEach((_, notifier) => notifier.dispose());
+    productCosts.forEach((_, notifier) => notifier.dispose());
     super.dispose();
   }
 
   void getProducts() async {
     var products = await dataBaseProvider.obtenerProductos();
-    for (int i = 0; i < products.length; i++) {
-      productQuantities[i] = ValueNotifier<int>(0);
+
+    // Ordenar productos alfabéticamente por nombre
+    products
+        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    for (var product in products) {
+      final productId = product.id.toString();
+      productQuantities[productId] = ValueNotifier<int>(0);
+      productCosts[productId] = ValueNotifier<int>(product.cost.toInt());
+      _quantityControllers[productId] = TextEditingController();
     }
-    for (int i = 0; i < products.length; i++) {
-      _costControllers[i] = TextEditingController();
-      _quantityControllers[i] = TextEditingController();
-      productQuantities[i] = ValueNotifier<int>(0);
-    }
-    setState(() {});
+
+    setState(() {
+      allProducts = products;
+      filteredProducts = products; // Inicialmente mostrar todos los productos
+    });
   }
 
   bool _isCheckoutEnabled() {
@@ -72,6 +98,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final existingProduct = selectedProducts.firstWhere(
         (p) => p.id == product.id,
         orElse: () => ProductModel(
+            subProduct: product.subProduct,
             id: product.id,
             name: product.name,
             cost: product.cost,
@@ -102,166 +129,237 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<ProductModel>>(
-      future: dataBaseProvider.obtenerProductos(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
-          final products = snapshot.data ?? [];
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text("Escoge un producto"),
-            ),
-            body: products.isEmpty
-                ? Container(
-                    padding: const EdgeInsets.all(20.0),
-                    margin: const EdgeInsets.all(20.0),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20.0),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.5),
-                          spreadRadius: 1,
-                          blurRadius: 5,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: const Text(
-                      "Aún no has agregado ningún producto a tu inventario",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16.0,
-                        color: Colors.black,
-                      ),
-                    ),
-                  )
-                : Column(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          child: ListView.builder(
-                            itemCount: products.length,
-                            itemBuilder: (context, index) {
-                              if (!productQuantities.containsKey(index)) {
-                                productQuantities[index] =
-                                    ValueNotifier<int>(0);
-                              }
-                              final costController = _costControllers[index] ??
-                                  TextEditingController();
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenHeight = MediaQuery.of(context).size.height;
 
-                              final quantityController =
-                                  _quantityControllers[index] ??
-                                      TextEditingController();
-
-                              costController.text =
-                                  products[index].cost.toString();
-
-                              passedIndex = index;
-
-                              return GestureDetector(
-                                onTap: () async {
-                                  // Handle tap
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10),
-                                  child: Item(
-                                    costOnChange: (String value) {
-                                      if (value != "") {
-                                        products[index].cost =
-                                            double.parse(value);
-                                      }
-                                    },
-                                    quantityOnChange: (String value) {
-                                      if (value == "") {
-                                        return;
-                                      }
-                                      productQuantities[index]!.value =
-                                          int.parse(value);
-                                      _updateCheckoutButtonState();
-
-                                      _updateSelectedProductQuantity(
-                                          products[index],
-                                          int.parse(quantityController.text),
-                                          true);
-                                    },
-                                    quantityCTRController: quantityController,
-                                    costCTRController: costController,
-                                    cost: products[index].cost,
-                                    quantity: productQuantities[index]!,
-                                    minus: () {
-                                      if (productQuantities[index]!.value ==
-                                          0) {
-                                        return;
-                                      }
-                                      productQuantities[index]!.value--;
-                                      _updateCheckoutButtonState();
-                                      _updateSelectedProductQuantity(
-                                          products[index], -1, false);
-                                    },
-                                    plus: () {
-                                      productQuantities[index]!.value++;
-                                      _updateCheckoutButtonState();
-                                      _updateSelectedProductQuantity(
-                                          products[index], 1, false);
-                                    },
-                                    hasTrailing: true,
-                                    magnitud: products[index].unit,
-                                    amount: products[index].amount,
-                                    name: products[index].name,
-                                    precio: products[index].unitPrice,
-                                    imagePath: products[index].file!,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Escoge un producto"),
+      ),
+      body: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: screenWidth * 0.02,
+          vertical: screenHeight * 0.01,
+        ),
+        child: Column(
+          children: [
+            // Filtros personalizados
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+              child: SingleChildScrollView(
+                scrollDirection:
+                    Axis.horizontal, // Habilitar desplazamiento horizontal
+                child: Row(
+                  children: <Widget>[
+                    for (var option in [
+                      'Producto terminado',
+                      'Materia prima',
+                      'Gasto administrativo',
+                      'Servicios',
+                    ])
+                      GestureDetector(
+                        onTap: () {
+                          selectedItemNotifier.value = option;
+                          _filterProducts(); // Actualizar la lista filtrada
+                        },
+                        child: ValueListenableBuilder<String>(
+                          valueListenable: selectedItemNotifier,
+                          builder: (context, value, child) {
+                            return Container(
+                              height: screenHeight * 0.05,
+                              width: screenWidth * 0.3, // Ancho ajustable
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(15),
+                                color: value == option
+                                    ? const Color.fromARGB(255, 165, 75, 175)
+                                    : const Color.fromARGB(255, 83, 69, 84),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  option,
+                                  textAlign:
+                                      TextAlign.center, // Centrar el texto
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w400,
+                                    color: Colors.white,
+                                    fontSize: screenHeight * 0.018,
                                   ),
                                 ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.all(20),
-                        width: double.infinity,
-                        height: 70,
-                        child: ValueListenableBuilder(
-                          valueListenable: isCheckoutButtonEnabled,
-                          builder: (context, value, child) {
-                            return ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    const Color.fromARGB(255, 108, 40, 123),
-                                textStyle: const TextStyle(fontSize: 20),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              onPressed: value
-                                  ? () {
-                                      Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) => ReceiptPage(
-                                                  selectedProducts:
-                                                      selectedProducts)));
-                                    }
-                                  : null,
-                              child: const Text(
-                                "Finalizar Compra",
-                                style: TextStyle(color: Colors.white),
                               ),
                             );
                           },
                         ),
-                      )
-                    ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Campo de búsqueda
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Buscar producto...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20.0),
                   ),
-          );
-        } else {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-      },
+                ),
+              ),
+            ),
+            Expanded(
+              child: filteredProducts.isEmpty
+                  ? Container(
+                      padding: const EdgeInsets.all(16.0),
+                      margin: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20.0),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.5),
+                            spreadRadius: 1,
+                            blurRadius: 5,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        "No se encontraron productos que coincidan con la búsqueda",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16.0,
+                          color: Colors.black,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filteredProducts.length,
+                      itemBuilder: (context, index) {
+                        final product = filteredProducts[index];
+                        final productId = product.id.toString();
+
+                        if (!productQuantities.containsKey(productId)) {
+                          productQuantities[productId] = ValueNotifier<int>(0);
+                        }
+                        if (!productCosts.containsKey(productId)) {
+                          productCosts[productId] =
+                              ValueNotifier<int>(product.cost.toInt());
+                        }
+
+                        final quantityController =
+                            _quantityControllers[productId] ??
+                                TextEditingController();
+
+                        quantityController.text =
+                            productQuantities[productId]!.value.toString();
+
+                        return GestureDetector(
+                          onTap: () async {
+                            // Handle tap
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: ValueListenableBuilder<int>(
+                              valueListenable: productCosts[productId]!,
+                              builder: (context, costValue, child) {
+                                return Item(
+                                  costOnChange: (String value) {
+                                    if (value.isNotEmpty) {
+                                      productCosts[productId]!.value =
+                                          int.parse(value);
+                                      product.cost =
+                                          productCosts[productId]!.value;
+                                    }
+                                  },
+                                  quantityOnChange: (String value) {
+                                    if (value == "") {
+                                      return;
+                                    }
+                                    productQuantities[productId]!.value =
+                                        int.parse(value);
+                                    _updateCheckoutButtonState();
+
+                                    _updateSelectedProductQuantity(
+                                        product,
+                                        int.parse(quantityController.text),
+                                        true);
+                                  },
+                                  quantityCTRController: quantityController,
+                                  costCTRController: TextEditingController(
+                                      text: costValue.toString()),
+                                  cost: productCosts[productId]!.value.toInt(),
+                                  quantity: productQuantities[productId]!,
+                                  minus: () {
+                                    if (productQuantities[productId]!.value ==
+                                        0) {
+                                      return;
+                                    }
+                                    productQuantities[productId]!.value--;
+                                    _updateCheckoutButtonState();
+                                    _updateSelectedProductQuantity(
+                                        product, -1, false);
+                                  },
+                                  plus: () {
+                                    productQuantities[productId]!.value++;
+                                    _updateCheckoutButtonState();
+                                    _updateSelectedProductQuantity(
+                                        product, 1, false);
+                                  },
+                                  hasTrailing: true,
+                                  magnitud: product.unit,
+                                  amount: product.amount,
+                                  name: product.name,
+                                  precio: product.unitPrice,
+                                  imagePath: product.file!,
+                                );
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Container(
+              margin: const EdgeInsets.all(16),
+              width: double.infinity,
+              height: screenHeight * 0.08,
+              child: ValueListenableBuilder(
+                valueListenable: isCheckoutButtonEnabled,
+                builder: (context, value, child) {
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color.fromARGB(255, 108, 40, 123),
+                      textStyle: const TextStyle(fontSize: 20),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: value
+                        ? () {
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => ReceiptPage(
+                                        selectedProducts: selectedProducts)));
+                          }
+                        : null,
+                    child: const Text(
+                      "Finalizar Compra",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

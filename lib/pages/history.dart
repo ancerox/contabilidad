@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:contabilidad/database/database.dart';
-import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
 import 'package:contabilidad/pages/create_order.dart';
@@ -9,22 +8,149 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-class HistoryScreen extends StatefulWidget {
+class OrderProvider extends ChangeNotifier {
+  List<OrderModel> _orders = [];
+  String _selectedStatus = 'historial';
+  String _filterText = '';
+  String _filterBy = 'Nombre';
+  DateTime? _selectedDate;
+
+  List<OrderModel> get orders => _orders;
+  String get selectedStatus => _selectedStatus;
+  String get filterText => _filterText;
+  String get filterBy => _filterBy;
+  DateTime? get selectedDate => _selectedDate;
+
+  void clearSelectedDate() {
+    _selectedDate = null;
+    notifyListeners();
+  }
+
+  void setOrders(List<OrderModel> orders) {
+    _orders = orders;
+    notifyListeners();
+  }
+
+  void setSelectedStatus(String status) {
+    _selectedStatus = status;
+    notifyListeners();
+  }
+
+  void setFilterText(String text) {
+    _filterText = text;
+    notifyListeners();
+  }
+
+  void setFilterBy(String filterBy) {
+    _filterBy = filterBy;
+    notifyListeners();
+  }
+
+  void setSelectedDate(DateTime? date) {
+    _selectedDate = date;
+    notifyListeners();
+  }
+
+  List<OrderModel> get filteredOrders {
+    List<OrderModel> filteredOrderList = _orders.where((OrderModel order) {
+      if (_selectedStatus == 'Transacciones') {
+        // Mostrar solo órdenes con status "pago" o "compra"
+        return order.status == 'Pago' || order.status == 'Compra';
+      }
+      return order.status == _selectedStatus || _selectedStatus == 'historial';
+    }).toList();
+
+    // Resto del código para filtrar según "Fecha", "Estatus", "Nombre", etc.
+    if (_filterBy == 'Fecha' && _selectedDate != null) {
+      filteredOrderList = filteredOrderList.where((OrderModel order) {
+        try {
+          DateTime parsedDate = DateFormat('MM/dd/yyyy').parse(order.date);
+          return DateFormat('MM/dd/yyyy').format(parsedDate) ==
+              DateFormat('MM/dd/yyyy').format(_selectedDate!);
+        } catch (e) {
+          print('Error al analizar la fecha: $e');
+          return false;
+        }
+      }).toList();
+    } else if (_filterBy == 'Estatus') {
+      filteredOrderList = filteredOrderList.where((OrderModel order) {
+        return order.status.toLowerCase() == _filterText.toLowerCase();
+      }).toList();
+    } else if (_filterText.isNotEmpty) {
+      filteredOrderList = filteredOrderList.where((OrderModel order) {
+        switch (_filterBy) {
+          case 'Nombre':
+            return order.clientName
+                .toLowerCase()
+                .contains(_filterText.toLowerCase());
+          case 'Número de orden':
+            return order.orderNumber
+                    ?.toLowerCase()
+                    .contains(_filterText.toLowerCase()) ??
+                false;
+          case 'Producto':
+            return order.productList?.any((product) => product.name
+                    .toLowerCase()
+                    .contains(_filterText.toLowerCase())) ??
+                false;
+          default:
+            return false;
+        }
+      }).toList();
+    }
+
+    return filteredOrderList;
+  }
+}
+
+class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
   @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (context) => OrderProvider(),
+      child: const HistoryScreenContent(),
+    );
+  }
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class HistoryScreenContent extends StatefulWidget {
+  const HistoryScreenContent({super.key});
+
+  @override
+  State<HistoryScreenContent> createState() => _HistoryScreenContentState();
+}
+
+class _HistoryScreenContentState extends State<HistoryScreenContent> {
   late final DataBase dataBase;
   final TextEditingController controller = TextEditingController();
-  String selectedStatus = 'historial';
 
   @override
   void initState() {
     super.initState();
     dataBase = Provider.of<DataBase>(context, listen: false);
+    loadOrders();
+  }
+
+  Future<void> loadOrders() async {
+    List<OrderModel> orders = await dataBase.getAllOrdersWithProducts();
+    Provider.of<OrderProvider>(context, listen: false).setOrders(orders);
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null &&
+        picked !=
+            Provider.of<OrderProvider>(context, listen: false).selectedDate) {
+      Provider.of<OrderProvider>(context, listen: false)
+          .setSelectedDate(picked);
+    }
   }
 
   @override
@@ -33,6 +159,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
       appBar: AppBar(
         title: const Text('Historial de Órdenes'),
         backgroundColor: const Color(0xffA338FF),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            onPressed: () async {
+              List<OrderModel> orders = context.read<OrderProvider>().orders;
+              await dataBase.exportToCsv(context, orders);
+            },
+            tooltip: 'Exportar como CSV',
+          ),
+          IconButton(
+            icon: const Icon(Icons.table_chart),
+            onPressed: () async {
+              List<OrderModel> orders = context.read<OrderProvider>().orders;
+              await dataBase.exportToExcel(context, orders);
+            },
+            tooltip: 'Exportar como Excel',
+          ),
+        ],
       ),
       backgroundColor: const Color(0xffF9F4FF),
       body: Padding(
@@ -50,76 +194,125 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5.0),
-                color: const Color(0xffEAD2FF),
-              ),
-              child: TextFormField(
-                onChanged: (String value) {
-                  setState(() {});
-                },
-                controller: controller,
-                decoration: const InputDecoration(
-                  suffixIcon: Icon(Icons.settings),
-                  icon: Icon(Icons.person),
-                  border: InputBorder.none,
-                  hintText: 'Nombre',
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButton<String>(
+                    value: Provider.of<OrderProvider>(context).filterBy,
+                    icon: const Icon(Icons.arrow_downward),
+                    onChanged: (String? newValue) {
+                      Provider.of<OrderProvider>(context, listen: false)
+                          .setFilterBy(newValue!);
+                    },
+                    items: <String>[
+                      'Nombre',
+                      'Fecha',
+                      'Número de orden',
+                      'Producto',
+                    ].map<DropdownMenuItem<String>>((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
+                if (Provider.of<OrderProvider>(context).filterBy == 'Fecha')
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => _selectDate(context),
+                      child: Text(
+                        Provider.of<OrderProvider>(context).selectedDate == null
+                            ? 'Seleccionar fecha'
+                            : DateFormat('MM/dd/yyyy').format(
+                                Provider.of<OrderProvider>(context)
+                                    .selectedDate!),
+                      ),
+                    ),
+                  )
+                else if (Provider.of<OrderProvider>(context).filterBy ==
+                    'Estatus')
+                  Expanded(
+                    child: DropdownButton<String>(
+                      value: Provider.of<OrderProvider>(context)
+                              .filterText
+                              .isEmpty
+                          ? 'pendiente'
+                          : Provider.of<OrderProvider>(context)
+                              .filterText, // Valor por defecto si está vacío
+                      icon: const Icon(Icons.arrow_downward),
+                      onChanged: (String? newValue) {
+                        Provider.of<OrderProvider>(context, listen: false)
+                            .setSelectedStatus(
+                                newValue!); // Usar setSelectedStatus en lugar de setFilterText
+                      },
+                      items: <String>[
+                        'pendiente',
+                        'pago',
+                        'cerrado',
+                      ].map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: TextFormField(
+                      onChanged: (String value) {
+                        Provider.of<OrderProvider>(context, listen: false)
+                            .setFilterText(value);
+                      },
+                      controller: controller,
+                      decoration: const InputDecoration(
+                        suffixIcon: Icon(Icons.search),
+                        icon: Icon(Icons.filter_list),
+                        border: InputBorder.none,
+                        hintText: 'Buscar...',
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 10),
-            FilterBar(
-              selectedStatus: selectedStatus,
-              onStatusSelected: (status) {
-                setState(() {
-                  selectedStatus = status;
-                });
+            Consumer<OrderProvider>(
+              builder: (context, orderProvider, child) {
+                return FilterBar(
+                  selectedStatus: orderProvider.selectedStatus,
+                  onStatusSelected: (status) {
+                    orderProvider.setSelectedStatus(status);
+                  },
+                );
               },
             ),
             Expanded(
-              child: FutureBuilder<List<OrderModel>>(
-                future: dataBase.getAllOrdersWithProducts(),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.done) {
-                    if (snap.hasData && snap.data != null) {
-                      List<OrderModel> orders = snap.data!;
-                      List<OrderModel> filteredOrderList =
-                          orders.where((OrderModel order) {
-                        return order.status == selectedStatus;
-                      }).toList();
+              child: Consumer<OrderProvider>(
+                builder: (context, orderProvider, child) {
+                  if (orderProvider.orders.isNotEmpty) {
+                    List<OrderModel> filteredOrderList =
+                        orderProvider.filteredOrders;
 
-                      if (selectedStatus == "historial") {
-                        filteredOrderList = orders;
-                      }
-
-                      if (controller.text.isNotEmpty) {
-                        filteredOrderList = orders.where((OrderModel order) {
-                          return order.clientName
-                              .toLowerCase()
-                              .contains(controller.text.toLowerCase());
-                        }).toList();
-                      }
-
-                      return ListView.builder(
-                        itemCount: filteredOrderList.length,
-                        itemBuilder: (context, index) {
-                          OrderModel order = filteredOrderList[index];
-                          final List<ProductModel> products =
-                              order.productList ?? [];
-                          return InvoiceWidget(
-                              dataBase: dataBase,
-                              order: order,
-                              products: products,
-                              onOrderUpdated: _refreshOrders);
-                        },
-                      );
-                    } else {
-                      return const Center(child: Text('No data available'));
-                    }
-                  } else {
-                    return const Center(child: CircularProgressIndicator());
+                    return ListView.builder(
+                      itemCount: filteredOrderList.length,
+                      itemBuilder: (context, index) {
+                        OrderModel order = filteredOrderList[index];
+                        final List<ProductModel> products =
+                            order.productList ?? [];
+                        return InvoiceWidget(
+                          dataBase: dataBase,
+                          order: order,
+                          products: products,
+                        );
+                      },
+                    );
+                  } else if (orderProvider.orders.isEmpty) {
+                    return const Center(
+                        child: Text('No se encontraron órdenes.'));
                   }
+
+                  return const CircularProgressIndicator();
                 },
               ),
             ),
@@ -127,10 +320,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       ),
     );
-  }
-
-  void _refreshOrders() {
-    setState(() {});
   }
 }
 
@@ -160,11 +349,6 @@ class FilterBar extends StatelessWidget {
             onPressed: () => onStatusSelected('historial'),
           ),
           _FilterButton(
-            text: 'Pago',
-            isSelected: selectedStatus == 'Pago',
-            onPressed: () => onStatusSelected('Pago'),
-          ),
-          _FilterButton(
             text: 'Pendiente',
             isSelected: selectedStatus == 'pendiente',
             onPressed: () => onStatusSelected('pendiente'),
@@ -175,9 +359,9 @@ class FilterBar extends StatelessWidget {
             onPressed: () => onStatusSelected('cerrado'),
           ),
           _FilterButton(
-            text: 'Compra',
-            isSelected: selectedStatus == 'Compra',
-            onPressed: () => onStatusSelected('Compra'),
+            text: 'Transacciones',
+            isSelected: selectedStatus == 'Transacciones',
+            onPressed: () => onStatusSelected('Transacciones'),
           ),
         ],
       ),
@@ -215,14 +399,13 @@ class InvoiceWidget extends StatefulWidget {
   final DataBase dataBase;
   final OrderModel order;
   final List<ProductModel> products;
-  final VoidCallback onOrderUpdated;
 
-  const InvoiceWidget(
-      {super.key,
-      required this.order,
-      required this.products,
-      required this.onOrderUpdated,
-      required this.dataBase});
+  const InvoiceWidget({
+    super.key,
+    required this.order,
+    required this.products,
+    required this.dataBase,
+  });
 
   @override
   State<InvoiceWidget> createState() => _InvoiceWidgetState();
@@ -235,16 +418,18 @@ class _InvoiceWidgetState extends State<InvoiceWidget> {
       onTap: widget.order.status == "pendiente"
           ? () {
               Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CreateOrderScreen(
-                      order: widget.order,
-                      isEditPage: true,
-                    ),
-                  )).then((value) {
-                print("$value TESTIol");
-
-                widget.onOrderUpdated();
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CreateOrderScreen(
+                    order: widget.order,
+                    isEditPage: true,
+                  ),
+                ),
+              ).then((value) async {
+                // Reload orders when returning from edit page
+                List<OrderModel> updatedOrders =
+                    await widget.dataBase.getAllOrdersWithProducts();
+                context.read<OrderProvider>().setOrders(updatedOrders);
               });
             }
           : null,
@@ -265,10 +450,14 @@ class _InvoiceWidgetState extends State<InvoiceWidget> {
         child: Column(
           children: [
             HeaderSection(order: widget.order),
-            ItemListSection(
-              products: widget.products,
-              order: widget.order,
-            ),
+            widget.order.status == "Pago"
+                ? Container()
+                : widget.order.status == "Compra"
+                    ? Container()
+                    : ItemListSection(
+                        products: widget.products,
+                        order: widget.order,
+                      ),
             TotalSection(
               order: widget.order,
               products: widget.products,
@@ -276,10 +465,64 @@ class _InvoiceWidgetState extends State<InvoiceWidget> {
             ),
             if (widget.order.pagos.isNotEmpty)
               PaymentSection(pagos: widget.order.pagos),
+            if (widget.order.status == "pendiente")
+              TextButton(
+                onPressed: () async {
+                  await _showCloseOrderConfirmation();
+                },
+                child: const Text(
+                  'Cerrar orden',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showCloseOrderConfirmation() async {
+    // Show a confirmation dialog before closing the order
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirmación'),
+          content: const Text('¿Estás seguro que deseas cerrar esta orden?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false); // User cancels the action
+              },
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(true); // User confirms the action
+              },
+              child: const Text('Cerrar Orden'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _closeOrder(); // Close the order if confirmed
+    }
+  }
+
+  Future<void> _closeOrder() async {
+    // Update the order status to "cerrado"
+    OrderModel updatedOrder = widget.order.copyWith(status: 'cerrado');
+
+    // Update the order in the database
+    await widget.dataBase.updateOrderFieldss(widget.order.id!, updatedOrder);
+
+    // Reload the orders after updating
+    List<OrderModel> updatedOrders =
+        await widget.dataBase.getAllOrdersWithProducts();
+    context.read<OrderProvider>().setOrders(updatedOrders);
   }
 }
 
@@ -316,7 +559,11 @@ class HeaderSection extends StatelessWidget {
                   width: 80,
                   decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      color: Colors.amber),
+                      color: order.status == "Pago"
+                          ? Colors.green[400]
+                          : order.status == 'Compra'
+                              ? Colors.red[400]
+                              : Colors.amber),
                   child: Center(
                     child: Text(order.status,
                         style: const TextStyle(
@@ -335,16 +582,29 @@ class HeaderSection extends StatelessWidget {
           Flexible(
             flex: 2,
             child: Text(
-              order.status == "Compra" || order.status == "Pago"
-                  ? DateFormat('dd MMMM yyyy')
-                      .format(DateTime.parse(order.date))
-                  : order.date,
+              DateFormat('dd MMMM yyyy').format(parseDate(order.date)),
               style: const TextStyle(color: Colors.white),
             ),
           ),
         ],
       ),
     );
+  }
+
+  DateTime parseDate(String date) {
+    try {
+      // Intenta analizar la fecha en formato "yyyy-MM-dd"
+      return DateTime.parse(date);
+    } catch (e) {
+      // Si falla, intenta analizarla como "MM/dd/yyyy"
+      try {
+        return DateFormat('MM/dd/yyyy').parse(date);
+      } catch (e) {
+        print('Error al analizar la fecha: $e');
+        return DateTime
+            .now(); // Devuelve una fecha por defecto si ambas conversiones fallan
+      }
+    }
   }
 }
 
@@ -381,7 +641,7 @@ class ItemRow extends StatelessWidget {
   final String image;
   final String title;
   final int quantity;
-  final double cost;
+  final int cost;
   final String unit;
 
   const ItemRow({
@@ -419,7 +679,7 @@ class ItemRow extends StatelessWidget {
               ),
             ),
           ),
-          Flexible(child: Text(" $title $unit")),
+          Flexible(child: Text(" $unit $title")),
         ],
       ),
     );
@@ -439,13 +699,24 @@ class TotalSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    int totalCost = order.productList!.fold(
-        0,
-        (int sum, ProductModel product) =>
-            sum +
-            product.cost.toInt() *
-                product.quantity!.value *
-                getTotalDaysBetweenDates());
+    // If the status is "cobro" or "venta," skip the margin and admin cost calculations
+    if (order.status == "Pago" || order.status == "Compra") {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xffA338FF), width: 0.4),
+        ),
+        child: Column(
+          children: [
+            TotalRow(
+              label: 'Monto de transaccion',
+              amount: '\$${order.totalCost}',
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Regular calculation for other statuses
     int adminCost = order.adminExpenses!.fold(
         0,
         (int sum, ProductModel product) =>
@@ -455,40 +726,24 @@ class TotalSection extends StatelessWidget {
         (int sum, ProductModel product) =>
             sum + product.unitPrice.toInt() * product.quantity!.value);
 
-    print("TESTOY ${getTotalDaysBetweenDates()}");
-
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xffA338FF), width: 0.4),
       ),
       child: Column(
         children: [
-          TotalRow(label: 'Costo total', amount: '\$${totalCost + adminCost}'),
+          TotalRow(
+              label: 'Costo total',
+              amount:
+                  '\$${(order.totalCost - double.parse(order.margen)) + adminCost}'),
           TotalRow(
               label: 'Precio total',
               amount: '\$${order.totalCost + adminPrice}'),
-          TotalRow(
-              label: 'Margen',
-              amount:
-                  '\$${(order.totalCost - totalCost) + (adminPrice - adminCost)}'),
+          TotalRow(label: 'Margen', amount: '\$${(order.margen)}'),
           TotalRow(label: 'Costos administrativos', amount: '\$$adminCost'),
         ],
       ),
     );
-  }
-
-  int getTotalDaysBetweenDates() {
-    int totalDays = 0;
-    if (order.datesInUse != null && order.datesInUse![1] != null) {
-      for (DateRange dateRange in order.datesInUse![1]!) {
-        if (dateRange.start != null && dateRange.end != null) {
-          int daysBetween =
-              dateRange.end!.difference(dateRange.start!).inDays + 1;
-          totalDays += daysBetween;
-        }
-      }
-    }
-    return totalDays;
   }
 }
 

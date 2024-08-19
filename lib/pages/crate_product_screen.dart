@@ -113,7 +113,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
       databaseProvider.selectedProductsNotifier = products;
       dateRanges = widget.product!.datesNotAvailable!;
       databaseProvider.selectedCommodities =
-          ValueNotifier(widget.product!.subProduct!);
+          ValueNotifier(widget.product!.subProduct ?? []);
       _nameController.text = widget.product!.name;
       _costController.text = widget.product!.cost.toString();
       _amountController.text = widget.product!.amount.toString();
@@ -147,8 +147,8 @@ class _CreateProductPageState extends State<CreateProductPage> {
           id: widget.product?.id, // Make sure to handle the ID appropriately
           name: _nameController.text,
           cost: _costController.text.isEmpty
-              ? 0.0
-              : double.tryParse(_costController.text) ?? 0,
+              ? 0
+              : int.parse(_costController.text) ?? 0,
           amount: int.tryParse(_amountController.text) ?? 0,
           unitPrice: double.tryParse(_unitPriceController.text) ?? 0.0,
           unit: _selectedUnit ?? 'Unidad',
@@ -193,14 +193,14 @@ class _CreateProductPageState extends State<CreateProductPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (databaseProvider.selectedCommodities.value.isNotEmpty) {
-      int totalCost = databaseProvider.selectedCommodities.value.fold(
-          0,
-          (int sum, ProductModel product) =>
-              sum + product.cost.toInt() * product.quantity!.value);
+    // if (databaseProvider.selectedCommodities.value.isNotEmpty) {
+    //   int totalCost = databaseProvider.selectedCommodities.value.fold(
+    //       0,
+    //       (int sum, ProductModel product) =>
+    //           sum + product.cost.toInt() * product.quantity!.value);
 
-      _costController.text = totalCost.toString();
-    }
+    //   _costController.text = totalCost.toString();
+    // }
 
     return Scaffold(
       appBar: AppBar(

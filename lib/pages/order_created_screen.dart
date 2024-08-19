@@ -197,6 +197,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                   ),
                   onPressed: () async {
                     if (widget.isEditPage) {
+                      print("${widget.productModelList} ggtt5");
                       await dataBaseProvider.updateOrderWithProducts(
                           widget.orderId,
                           widget.orderModel,
@@ -205,6 +206,9 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                         const SnackBar(
                             content: Text('Orden actualizada con éxito')),
                       );
+                      dataBaseProvider.selectedProductsNotifier.value = [];
+                      dataBaseProvider.dateRangeMap.clear();
+                      dataBaseProvider.selectedCommodities.value.clear();
                       Navigator.push(context,
                           MaterialPageRoute(builder: (_) => HomePage()));
                       return;

@@ -11,7 +11,7 @@ class ProductModel extends Equatable {
   int amount;
   double unitPrice;
   final String productCategory;
-  double cost;
+  int cost;
   final String unit;
   final String productType;
   ValueNotifier<int>? quantity;
@@ -42,7 +42,7 @@ class ProductModel extends Equatable {
     int? amount,
     double? unitPrice,
     String? productCategory,
-    double? cost,
+    int? cost,
     String? unit,
     String? productType,
     ValueNotifier<int>? quantity,
@@ -87,6 +87,7 @@ class ProductModel extends Equatable {
   @override
   bool get stringify => true;
 
+  // Converts the object to a Map
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -105,13 +106,14 @@ class ProductModel extends Equatable {
       'datesNotAvailable': datesNotAvailable != null
           ? jsonEncode(
               datesNotAvailable!.map((range) => range.toMap()).toList())
-          : null,
+          : [],
       'datesUsed': datesUsed != null
           ? jsonEncode(datesUsed!.map((range) => range.toMap()).toList())
           : null,
     };
   }
 
+  // Creates a ProductModel instance from a Map
   static ProductModel fromMap(Map<String, dynamic> map) {
     return ProductModel(
       id: map['id'],
@@ -120,19 +122,21 @@ class ProductModel extends Equatable {
       amount: map['amount'],
       unitPrice: map['unitPrice'],
       productCategory: map['productCategory'],
-      cost: map['cost'],
+      cost: (map['cost'] as double).toInt(),
       unit: map['unit'],
       productType: map['productType'],
       quantity: ValueNotifier<int>(map['quantity'] ?? 0),
-      subProduct: map['subProduct'] != null
-          ? List<ProductModel>.from(
-              jsonDecode(map['subProduct']).map((p) => ProductModel.fromMap(p)))
-          : null,
-      datesNotAvailable: map['datesNotAvailable'] != null
-          ? List<DateRange>.from(jsonDecode(map['datesNotAvailable'])
-              .map((range) => DateRange.fromMap(range)))
-          : null,
-      datesUsed: map['datesUsed'] != null
+      subProduct: map['subProduct'] != null && map['subProduct'] is String
+          ? (jsonDecode(map['subProduct']) as List<dynamic>?)
+              ?.map((p) => ProductModel.fromMap(p as Map<String, dynamic>))
+              .toList()
+          : [],
+      datesNotAvailable:
+          map['datesNotAvailable'] != null && map['datesNotAvailable'] is String
+              ? List<DateRange>.from(jsonDecode(map['datesNotAvailable'])
+                  .map((range) => DateRange.fromMap(range)))
+              : [],
+      datesUsed: map['datesUsed'] != null && map['datesUsed'] is String
           ? List<DateRange>.from(jsonDecode(map['datesUsed'])
               .map((range) => DateRange.fromMap(range)))
           : null,

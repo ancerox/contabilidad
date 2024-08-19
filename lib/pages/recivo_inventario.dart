@@ -17,6 +17,7 @@ class ReceiptPage extends StatefulWidget {
 class _ReceiptPageState extends State<ReceiptPage> {
   final TextEditingController conceptoController = TextEditingController();
   late DataBase dataBaseProvider;
+
   @override
   void initState() {
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
@@ -97,6 +98,35 @@ class _ReceiptPageState extends State<ReceiptPage> {
                 padding: const EdgeInsets.all(16.0),
                 child: ElevatedButton(
                   onPressed: () async {
+                    // Lógica para exportar a Excel
+                    await dataBaseProvider.exportToExcel(context, [
+                      OrderModel(
+                        pagos: [],
+                        orderNumber: "",
+                        clientName: conceptoController.text,
+                        celNumber: '',
+                        direccion: '',
+                        date: DateTime.now().toString(),
+                        comment: "",
+                        totalCost: totalCost,
+                        status: 'Compra',
+                        margen: '',
+                        totalOwned: '',
+                        productList: widget.selectedProducts,
+                      )
+                    ]);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                  ),
+                  child: const Text('Exportar a Excel',
+                      style: TextStyle(color: Colors.white)),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: ElevatedButton(
+                  onPressed: () async {
                     await updateMultipleProducts(context,
                         conceptoController.text, widget.selectedProducts);
 
@@ -146,18 +176,39 @@ class _ReceiptPageState extends State<ReceiptPage> {
       List<ProductModel> consolidatedProducts) async {
     final dataBase = Provider.of<DataBase>(context, listen: false);
 
-    // Filtra los productos que tienen subproductos
-    List<ProductModel> productsWithSubproducts = consolidatedProducts
-        .where((product) =>
-            product.subProduct != null && product.subProduct!.isNotEmpty)
-        .toList();
+    for (var product in consolidatedProducts) {
+      dataBase.updateProduct(product);
+      if (product.productType == 'Servicio' ||
+          product.productType == "Gasto administrativo") {
+        continue;
+      } else if (product.productType == 'Materia prima' ||
+          product.productType == "Producto terminado" &&
+              product.subProduct == null ||
+          product.subProduct!.isEmpty) {
+        int newAmount = product.amount + product.quantity!.value;
+        product.amount = newAmount;
+        await dataBase.updateProduct(product);
+      } else if (product.productType == 'Materia prima' ||
+          product.productType == "Producto terminado") {
+        int newAmount = product.amount + product.quantity!.value;
+        product.amount = newAmount;
+        await dataBase.updateProduct(product);
 
-    if (productsWithSubproducts.isNotEmpty) {
-      // Reduce la cantidad de los productos en la base de datos
-      await dataBase.reduceProductStock(productsWithSubproducts);
+        if (product.subProduct != null) {
+          for (var subProduct in product.subProduct!) {
+            var subProductFromDb =
+                await dataBase.getProductById(subProduct.id!);
+            if (subProductFromDb != null) {
+              int newSubProductAmount =
+                  subProductFromDb.amount - product.quantity!.value;
+              subProductFromDb.amount = newSubProductAmount;
+              await dataBase.updateProduct(subProductFromDb);
+            }
+          }
+        }
+      }
     }
 
-    // Crea una orden con el concepto y los productos consolidados
     OrderModel order = OrderModel(
       pagos: [],
       orderNumber: "",

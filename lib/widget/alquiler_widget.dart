@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 class AlquilerWidget extends StatefulWidget {
+  final Map<int, DateTime?> startDays;
+  final Map<int, DateTime?> endDays;
   final bool isEditPage;
   final DateTime selectedDay;
   final void Function(int, ProductModel, Function) showCalendar;
@@ -22,6 +24,8 @@ class AlquilerWidget extends StatefulWidget {
     required this.showCalendar,
     required this.productDateRanges,
     required this.calculateTotalCost,
+    required this.endDays,
+    required this.startDays,
   });
 
   @override
@@ -39,24 +43,30 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
   @override
   void initState() {
     super.initState();
+    dataBaseProvider = Provider.of<DataBase>(context, listen: false);
 
     _searchController = TextEditingController();
     _searchController.addListener(() {
       _searchTextNotifier.value = _searchController.text;
     });
-    dataBaseProvider = Provider.of<DataBase>(context, listen: false);
 
-    dataBaseProvider.totalPriceNotifier = _totalPriceNotifier;
     if (widget.isEditPage) {
       print("testoy");
       _updateTotalPrice();
       for (var element in dataBaseProvider.selectedProductsNotifier.value) {
         _handleQuantityChanged(element.name, element.quantity!.value);
       }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        setState(() {});
-      });
+      dataBaseProvider.totalPrice = _totalPriceNotifier.value;
     }
+    // dataBaseProvider.totalPriceNotifier = _totalPriceNotifier;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    dataBaseProvider = Provider.of<DataBase>(context, listen: false);
+    dataBaseProvider.totalPrice =
+        _totalPriceNotifier.value; // Assign the notifier here
   }
 
   @override
@@ -71,7 +81,6 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
     productQuantities.forEach((key, value) => value.dispose());
     productTotalPrices.forEach((key, value) => value.dispose());
     dataBaseProvider.selectedProductsNotifier.value.clear();
-    // _totalPriceNotifier.dispose();
     super.dispose();
   }
 
@@ -87,13 +96,14 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
 
   double _calculateProductTotalPrice(ProductModel product) {
     final quantity = productQuantities[product.name]?.value ?? 0;
-    final dateRanges = widget.productDateRanges[product.id] ?? [];
-    final totalDays = dateRanges.fold(
-      0,
-      (sum, dateRange) =>
-          sum + dateRange.end!.difference(dateRange.start!).inDays + 1,
-    );
-    return totalDays * product.unitPrice * quantity;
+    final startDay = widget.startDays[product.id];
+    final endDay = widget.endDays[product.id];
+
+    if (startDay != null && endDay != null) {
+      final totalDays = endDay.difference(startDay).inDays + 1;
+      return totalDays * product.unitPrice * quantity;
+    }
+    return 0.0;
   }
 
   void _updateProductTotalPrice(String productName) {
@@ -119,10 +129,12 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
             0, (sum, product) => sum + _calculateProductTotalPrice(product));
 
     _totalPriceNotifier.value = totalPrice;
+    dataBaseProvider.totalPrice = _totalPriceNotifier.value;
   }
 
   @override
   Widget build(BuildContext context) {
+    dataBaseProvider = Provider.of<DataBase>(context, listen: true);
     return FutureBuilder<List<ProductModel>>(
       future: dataBaseProvider.obtenerProductos(),
       builder: (context, snapshot) {
@@ -145,6 +157,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               _searchController.clear();
+                              setState(() {});
                             },
                           ),
                         ),
@@ -159,15 +172,39 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                               .toLowerCase()
                               .contains(value.toLowerCase());
                         }).toList();
+                        List<ProductModel> listOfProductsSave =
+                            products.where((product) {
+                          return product.name
+                              .toLowerCase()
+                              .contains(value.toLowerCase());
+                        }).toList();
                         filteredProducts = filteredProducts
                             .where((product) =>
                                 product.productCategory == "En alquiler")
                             .toList();
 
+                        listOfProductsSave.removeWhere((productoAFiltrar) {
+                          return dataBaseProvider.selectedProductsNotifier.value
+                              .any((productoConCantidad) {
+                            return productoConCantidad.id ==
+                                    productoAFiltrar.id &&
+                                productoConCantidad.quantity!.value > 0;
+                          });
+                        });
+                        listOfProductsSave.removeWhere((element) {
+                          return dataBaseProvider.selectedProductsNotifier.value
+                              .any((productoConCantidad) {
+                            return productoConCantidad.id == element.id;
+                          });
+                        });
+
                         return Column(
                           children: [
+                            widget.isEditPage
+                                ? const Text("Productos agregados")
+                                : Container(),
                             SizedBox(
-                              height: 150,
+                              height: 100,
                               child: ListView.builder(
                                 itemCount: widget.isEditPage
                                     ? dataBaseProvider
@@ -202,164 +239,400 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                     valueListenable:
                                         productQuantities[product.name]!,
                                     builder: (context, quantity, child) {
-                                      return GestureDetector(
+                                      return ProductTile(
+                                        title: GestureDetector(
                                           onTap: () {
                                             widget.showCalendar(index, product,
                                                 () {
                                               _handleQuantityChanged(
-                                                  product.name, quantity);
+                                                  product.name, 0);
                                             });
                                           },
-                                          child: ProductTile(
-                                            isEditPage: widget.isEditPage,
-                                            dateSelected: widget.selectedDay,
-                                            productModel: product,
-                                            imagePath: product.file!,
-                                            productName: product.name,
-                                            initialQuantity: quantity,
-                                            productDateRanges:
-                                                widget.productDateRanges,
-                                            onQuantityChanged: (quantity) {
-                                              // Get the current list of selected products
-                                              List<ProductModel> currentList =
-                                                  dataBaseProvider
-                                                      .selectedProductsNotifier
-                                                      .value;
+                                          child: Text(product.name),
+                                        ),
+                                        endDay: widget.endDays[product.id] ??
+                                            DateTime.now(),
+                                        startDay:
+                                            widget.startDays[product.id] ??
+                                                DateTime.now(),
+                                        isEditPage: widget.isEditPage,
+                                        dateSelected: widget.selectedDay,
+                                        productModel: product,
+                                        imagePath: product.file!,
+                                        productName: product.name,
+                                        initialQuantity: quantity,
+                                        productDateRanges:
+                                            widget.productDateRanges,
+                                        onQuantityChanged: (quantity) {
+                                          // Get the current list of selected products
+                                          List<ProductModel> currentList =
+                                              dataBaseProvider
+                                                  .selectedProductsNotifier
+                                                  .value;
 
-                                              // Check if the product exists in the current list
-                                              bool productExists =
-                                                  currentList.any((p) =>
-                                                      p.id == product.id);
+                                          // Check if the product exists in the current list
+                                          bool productExists = currentList
+                                              .any((p) => p.id == product.id);
 
-                                              // If quantity is 0, remove the product from the list if it exists
-                                              if (quantity == 0) {
-                                                if (productExists) {
-                                                  _handleQuantityChanged(
-                                                      product.name, quantity);
-                                                  List<ProductModel>
-                                                      updatedList =
-                                                      List<ProductModel>.from(
-                                                          currentList);
-                                                  updatedList.removeWhere((p) =>
-                                                      p.id == product.id);
-                                                  dataBaseProvider
-                                                      .selectedProductsNotifier
-                                                      .value = updatedList;
-                                                }
-                                              } else {
-                                                // Quantity is not 0
-                                                if (productExists) {
-                                                  // Update the existing product's borrowQuantity in datesUsed
-                                                  for (var productLooped
-                                                      in currentList) {
-                                                    if (productLooped.id ==
-                                                        product.id) {
-                                                      bool dateRangeUpdated =
-                                                          false;
+                                          // If quantity is 0, remove the product from the list if it exists
+                                          if (quantity == 0) {
+                                            if (productExists) {
+                                              _handleQuantityChanged(
+                                                  product.name, 0);
+                                              List<ProductModel> updatedList =
+                                                  List<ProductModel>.from(
+                                                      currentList);
 
-                                                      // Update borrowQuantity for the specific date range if it exists
-                                                      if (productLooped
-                                                                  .datesUsed !=
-                                                              null &&
-                                                          product.id! ==
-                                                              productLooped
-                                                                  .id) {
-                                                        for (var elementDateRange
-                                                            in productLooped
-                                                                .datesUsed!) {
-                                                          if (elementDateRange
-                                                                      .id !=
-                                                                  null &&
-                                                              dataBaseProvider
-                                                                  .dateRangeMap
-                                                                  .containsKey(
-                                                                      elementDateRange
-                                                                          .id)) {
-                                                            elementDateRange
-                                                                    .borrowQuantity =
-                                                                quantity;
-                                                            dateRangeUpdated =
-                                                                true;
-                                                            break;
-                                                          }
-                                                        }
-                                                      }
+                                              dataBaseProvider
+                                                  .selectedProductsNotifier
+                                                  .value = updatedList;
+                                            }
+                                            for (var productLooped
+                                                in currentList) {
+                                              if (productLooped.id ==
+                                                  product.id) {
+                                                bool dateRangeUpdated = false;
 
-                                                      // If no dateRange was updated, add a new DateRange
-                                                      if (!dateRangeUpdated) {
-                                                        DateRange newDateRange =
-                                                            DateRange(
-                                                          id: uuid.v4(),
-                                                          start:
-                                                              dataBaseProvider
-                                                                  .dateRange
-                                                                  .value
-                                                                  .start,
-                                                          end: dataBaseProvider
-                                                              .dateRange
-                                                              .value
-                                                              .end,
-                                                          borrowQuantity:
-                                                              quantity,
-                                                        );
-                                                        productLooped
-                                                            .datesUsed ??= [];
-                                                        productLooped.datesUsed!
-                                                            .add(newDateRange);
+                                                // Update borrowQuantity for the specific date range if it exists
+                                                if (productLooped.datesUsed !=
+                                                        null &&
+                                                    product.id! ==
+                                                        productLooped.id) {
+                                                  for (var elementDateRange
+                                                      in productLooped
+                                                          .datesUsed!) {
+                                                    if (elementDateRange.id !=
+                                                            null &&
                                                         dataBaseProvider
-                                                                    .dateRangeMap[
-                                                                newDateRange
-                                                                    .id!] =
-                                                            newDateRange;
-                                                      }
+                                                            .dateRangeMap
+                                                            .containsKey(
+                                                                elementDateRange
+                                                                    .id)) {
+                                                      elementDateRange
+                                                          .borrowQuantity = 0;
 
-                                                      print(
-                                                          "$productLooped TESTO");
-                                                      print(
-                                                          "TESTO ---------------------");
-                                                      print(
-                                                          "$currentList TESTO");
-                                                      _handleQuantityChanged(
-                                                          productLooped.name,
-                                                          quantity);
                                                       break;
                                                     }
                                                   }
-                                                } else {
-                                                  // Add the product to the list if it doesn't exist
-                                                  DateRange newDateRange =
-                                                      DateRange(
-                                                    id: uuid.v4(),
-                                                    start: dataBaseProvider
-                                                        .dateRange.value.start,
-                                                    end: dataBaseProvider
-                                                        .dateRange.value.end,
-                                                    borrowQuantity: quantity,
-                                                  );
-                                                  product.datesUsed = [
-                                                    newDateRange
-                                                  ];
-                                                  currentList.add(product);
-                                                  // dataBaseProvider
-                                                  //     .selectedProductsNotifier
-                                                  //     .value = currentList;
-
-                                                  // // Add to dateRangeMap
-                                                  // dataBaseProvider.dateRangeMap[
-                                                  //         newDateRange.id!] =
-                                                  //     newDateRange;
-
-                                                  // _handleQuantityChanged(
-                                                  //     product.name, quantity);
                                                 }
                                               }
-                                            },
-                                          ));
+                                            }
+                                            // Remove the product from selectedProductsNotifier
+
+                                            return;
+                                          } else {
+                                            // Quantity is not 0
+                                            if (productExists) {
+                                              // Update the existing product's borrowQuantity in datesUsed
+                                              for (var productLooped
+                                                  in currentList) {
+                                                if (productLooped.id ==
+                                                    product.id) {
+                                                  bool dateRangeUpdated = false;
+
+                                                  // Update borrowQuantity for the specific date range if it exists
+                                                  if (productLooped.datesUsed !=
+                                                          null &&
+                                                      product.id! ==
+                                                          productLooped.id) {
+                                                    for (var elementDateRange
+                                                        in productLooped
+                                                            .datesUsed!) {
+                                                      if (elementDateRange.id !=
+                                                              null &&
+                                                          dataBaseProvider
+                                                              .dateRangeMap
+                                                              .containsKey(
+                                                                  elementDateRange
+                                                                      .id)) {
+                                                        elementDateRange
+                                                                .borrowQuantity =
+                                                            quantity;
+                                                        dateRangeUpdated = true;
+                                                        break;
+                                                      }
+                                                    }
+                                                  }
+
+                                                  // If no dateRange was updated, add a new DateRange
+                                                  if (!dateRangeUpdated) {
+                                                    DateRange newDateRange =
+                                                        DateRange(
+                                                      id: uuid.v4(),
+                                                      start: dataBaseProvider
+                                                          .dateRange
+                                                          .value
+                                                          .start,
+                                                      end: dataBaseProvider
+                                                          .dateRange.value.end,
+                                                      borrowQuantity: quantity,
+                                                    );
+                                                    productLooped.datesUsed ??=
+                                                        [];
+                                                    productLooped.datesUsed!
+                                                        .add(newDateRange);
+                                                    dataBaseProvider
+                                                                .dateRangeMap[
+                                                            newDateRange.id!] =
+                                                        newDateRange;
+                                                  }
+
+                                                  print("$productLooped TESTO");
+                                                  print(
+                                                      "TESTO ---------------------");
+                                                  print("$currentList TESTO");
+                                                  _handleQuantityChanged(
+                                                      productLooped.name,
+                                                      quantity);
+                                                  break;
+                                                }
+                                              }
+                                            } else {
+                                              // Add the product to the list if it doesn't exist
+                                              DateRange newDateRange =
+                                                  DateRange(
+                                                id: uuid.v4(),
+                                                start: dataBaseProvider
+                                                    .dateRange.value.start,
+                                                end: dataBaseProvider
+                                                    .dateRange.value.end,
+                                                borrowQuantity: quantity,
+                                              );
+                                              product.datesUsed = [
+                                                newDateRange
+                                              ];
+                                              currentList.add(product);
+                                              dataBaseProvider
+                                                  .selectedProductsNotifier
+                                                  .value = currentList;
+
+                                              // Add to dateRangeMap
+                                              dataBaseProvider.dateRangeMap[
+                                                      newDateRange.id!] =
+                                                  newDateRange;
+
+                                              _handleQuantityChanged(
+                                                  product.name, quantity);
+                                            }
+                                          }
+                                        },
+                                      );
                                     },
                                   );
                                 },
                               ),
                             ),
+                            widget.isEditPage
+                                ? const Divider(
+                                    thickness: 4,
+                                  )
+                                : Container(),
+                            widget.isEditPage
+                                ? SizedBox(
+                                    height: 100,
+                                    child: ListView.builder(
+                                      itemCount: listOfProductsSave.length,
+                                      itemBuilder: (context, index) {
+                                        const uuid = Uuid();
+                                        ProductModel product =
+                                            listOfProductsSave[index];
+
+                                        bool isSelected = dataBaseProvider
+                                            .selectedProductsNotifier.value
+                                            .any((p) => p.id == product.id);
+
+                                        if (productQuantities[product.name] ==
+                                            null) {
+                                          productQuantities[product.name] =
+                                              ValueNotifier<int>(0);
+                                        }
+
+                                        if (productTotalPrices[product.name] ==
+                                            null) {
+                                          productTotalPrices[product.name] =
+                                              ValueNotifier<double>(0);
+                                        }
+
+                                        return ValueListenableBuilder<int>(
+                                          valueListenable:
+                                              productQuantities[product.name]!,
+                                          builder: (context, quantity, child) {
+                                            return ProductTile(
+                                              title: GestureDetector(
+                                                onTap: () {
+                                                  widget.showCalendar(
+                                                      index, product, () {
+                                                    _handleQuantityChanged(
+                                                        product.name, 0);
+                                                  });
+                                                },
+                                                child: Text(product.name),
+                                              ),
+                                              endDay:
+                                                  widget.endDays[product.id] ??
+                                                      DateTime.now(),
+                                              startDay: widget
+                                                      .startDays[product.id] ??
+                                                  DateTime.now(),
+                                              isEditPage: widget.isEditPage,
+                                              dateSelected: widget.selectedDay,
+                                              productModel: product,
+                                              imagePath: product.file!,
+                                              productName: product.name,
+                                              initialQuantity: quantity,
+                                              productDateRanges:
+                                                  widget.productDateRanges,
+                                              onQuantityChanged: (quantity) {
+                                                // Get the current list of selected products
+                                                List<ProductModel> currentList =
+                                                    dataBaseProvider
+                                                        .selectedProductsNotifier
+                                                        .value;
+
+                                                // Check if the product exists in the current list
+                                                bool productExists =
+                                                    currentList.any((p) =>
+                                                        p.id == product.id);
+
+                                                // If quantity is 0, remove the product from the list if it exists
+                                                if (quantity == 0 &&
+                                                    !widget.isEditPage) {
+                                                  if (productExists) {
+                                                    _handleQuantityChanged(
+                                                        product.name, quantity);
+                                                    List<ProductModel>
+                                                        updatedList =
+                                                        List<ProductModel>.from(
+                                                            currentList);
+                                                    updatedList.removeWhere(
+                                                        (p) =>
+                                                            p.id == product.id);
+                                                    dataBaseProvider
+                                                        .selectedProductsNotifier
+                                                        .value = updatedList;
+                                                  }
+                                                } else {
+                                                  // Quantity is not 0
+                                                  if (productExists) {
+                                                    // Update the existing product's borrowQuantity in datesUsed
+                                                    for (var productLooped
+                                                        in currentList) {
+                                                      if (productLooped.id ==
+                                                          product.id) {
+                                                        bool dateRangeUpdated =
+                                                            false;
+
+                                                        // Update borrowQuantity for the specific date range if it exists
+                                                        if (productLooped
+                                                                    .datesUsed !=
+                                                                null &&
+                                                            product.id! ==
+                                                                productLooped
+                                                                    .id) {
+                                                          for (var elementDateRange
+                                                              in productLooped
+                                                                  .datesUsed!) {
+                                                            if (elementDateRange
+                                                                        .id !=
+                                                                    null &&
+                                                                dataBaseProvider
+                                                                    .dateRangeMap
+                                                                    .containsKey(
+                                                                        elementDateRange
+                                                                            .id)) {
+                                                              elementDateRange
+                                                                      .borrowQuantity =
+                                                                  quantity;
+                                                              dateRangeUpdated =
+                                                                  true;
+                                                              break;
+                                                            }
+                                                          }
+                                                        }
+
+                                                        // If no dateRange was updated, add a new DateRange
+                                                        if (!dateRangeUpdated) {
+                                                          DateRange
+                                                              newDateRange =
+                                                              DateRange(
+                                                            id: uuid.v4(),
+                                                            start:
+                                                                dataBaseProvider
+                                                                    .dateRange
+                                                                    .value
+                                                                    .start,
+                                                            end:
+                                                                dataBaseProvider
+                                                                    .dateRange
+                                                                    .value
+                                                                    .end,
+                                                            borrowQuantity:
+                                                                quantity,
+                                                          );
+                                                          productLooped
+                                                              .datesUsed ??= [];
+                                                          productLooped
+                                                              .datesUsed!
+                                                              .add(
+                                                                  newDateRange);
+                                                          dataBaseProvider
+                                                                      .dateRangeMap[
+                                                                  newDateRange
+                                                                      .id!] =
+                                                              newDateRange;
+                                                        }
+
+                                                        print(
+                                                            "$productLooped TESTO");
+                                                        print(
+                                                            "TESTO ---------------------");
+                                                        print(
+                                                            "$currentList TESTO");
+                                                        _handleQuantityChanged(
+                                                            productLooped.name,
+                                                            quantity);
+                                                        break;
+                                                      }
+                                                    }
+                                                  } else {
+                                                    // Add the product to the list if it doesn't exist
+                                                    DateRange newDateRange =
+                                                        DateRange(
+                                                      id: uuid.v4(),
+                                                      start: dataBaseProvider
+                                                          .dateRange
+                                                          .value
+                                                          .start,
+                                                      end: dataBaseProvider
+                                                          .dateRange.value.end,
+                                                      borrowQuantity: quantity,
+                                                    );
+                                                    product.datesUsed = [
+                                                      newDateRange
+                                                    ];
+                                                    currentList.add(product);
+                                                    dataBaseProvider
+                                                        .selectedProductsNotifier
+                                                        .value = currentList;
+
+                                                    // Add to dateRangeMap
+                                                    dataBaseProvider
+                                                                .dateRangeMap[
+                                                            newDateRange.id!] =
+                                                        newDateRange;
+
+                                                    _handleQuantityChanged(
+                                                        product.name, quantity);
+                                                  }
+                                                }
+                                              },
+                                            );
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : Container(),
                             ElevatedButton(
                               onPressed: () {
                                 Navigator.push(
@@ -409,6 +682,12 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                           builder: (context,
                                                               totalPrice,
                                                               child) {
+                                                            final startDay =
+                                                                widget.startDays[
+                                                                    product.id];
+                                                            final endDay =
+                                                                widget.endDays[
+                                                                    product.id];
                                                             return Container(
                                                               margin:
                                                                   const EdgeInsets
@@ -534,7 +813,9 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                                             ),
                                                                           ),
                                                                           Text(
-                                                                            "${widget.productDateRanges[product.id]?.fold<int>(0, (sum, dateRange) => sum + dateRange.end!.difference(dateRange.start!).inDays + 1) ?? 0} días",
+                                                                            startDay != null && endDay != null
+                                                                                ? "${endDay.difference(startDay).inDays + 1} días"
+                                                                                : " días",
                                                                             style:
                                                                                 const TextStyle(
                                                                               fontSize: 16,
@@ -553,7 +834,9 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                                             ),
                                                                           ),
                                                                           Text(
-                                                                            "\$${totalPrice.toStringAsFixed(2)}",
+                                                                            startDay != null && endDay != null
+                                                                                ? "\$${(endDay.difference(startDay).inDays + 1) * (product.quantity!.value) * (product.unitPrice)}"
+                                                                                : "\$0",
                                                                             style:
                                                                                 const TextStyle(
                                                                               fontSize: 16,

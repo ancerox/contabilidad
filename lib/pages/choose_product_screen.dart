@@ -199,7 +199,7 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
                               // Pass the quantityNotifier to your Item widget or wherever it's needed
                               print(products);
                               return Item(
-                                cost: product.cost,
+                                cost: product.cost.toInt(),
                                 costOnChange: (String value) {
                                   _updateSelectedProductQuantity(
                                       products[index], int.parse(value), true);

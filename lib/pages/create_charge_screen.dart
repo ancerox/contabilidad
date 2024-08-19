@@ -1,6 +1,7 @@
 import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class AgregarCobroPage extends StatefulWidget {
@@ -61,7 +62,10 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.attach_money),
                       ),
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        signed: true,
+                        decimal: true,
+                      ),
                     ),
                   ],
                 ),
@@ -85,15 +89,16 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                             itemBuilder: (context, index) {
                               final order = filteredOrderList[index];
 
-                              bool isSelected = value == index;
+                              double totalOwnedAmount =
+                                  double.tryParse(order.totalOwned) ?? 0.0;
+                              bool isSelected = totalOwnedAmount <= 0;
+
                               return Card(
-                                color: int.parse(order.totalOwned) <=
-                                        int.parse("0")
+                                color: totalOwnedAmount <= 0
                                     ? Colors.greenAccent[100]
                                     : null,
                                 child: ListTile(
-                                  onTap: int.parse(order.totalOwned) <=
-                                          int.parse("0")
+                                  onTap: totalOwnedAmount <= 0
                                       ? () {
                                           final snackBar = SnackBar(
                                             content: const Text(
@@ -104,28 +109,19 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                            backgroundColor: Colors
-                                                .red, // Un color de fondo llamativo
-                                            duration: const Duration(
-                                                seconds:
-                                                    3), // Duración que el SnackBar será mostrado
-
-                                            behavior: SnackBarBehavior
-                                                .floating, // Hace que el SnackBar "flote" sobre la UI
+                                            backgroundColor: Colors.red,
+                                            duration:
+                                                const Duration(seconds: 3),
+                                            behavior: SnackBarBehavior.floating,
                                             shape: RoundedRectangleBorder(
-                                              // Forma personalizada
-                                              borderRadius: BorderRadius.circular(
-                                                  20.0), // Bordes redondeados
+                                              borderRadius:
+                                                  BorderRadius.circular(20.0),
                                             ),
-                                            margin: const EdgeInsets.all(
-                                                10), // Margen alrededor del SnackBar
+                                            margin: const EdgeInsets.all(10),
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 24.0,
-                                                vertical:
-                                                    12.0), // Ajusta el padding interno
+                                                vertical: 12.0),
                                           );
-
-                                          // Muestra el SnackBar
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(snackBar);
                                         }
@@ -159,14 +155,12 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        int.parse(order.totalOwned) <
-                                                int.parse("0")
-                                            ? "Extra ${int.parse(order.totalOwned).abs()}"
+                                        totalOwnedAmount < 0
+                                            ? "Extra ${totalOwnedAmount.abs()}"
                                             : 'Deuda total: ${order.totalOwned}',
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                            color: int.parse(order.totalOwned) <
-                                                    int.parse("0")
+                                            color: totalOwnedAmount < 0
                                                 ? const Color.fromARGB(
                                                     255, 36, 58, 225)
                                                 : Colors.red),
@@ -193,7 +187,8 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                       );
                     } else {
                       return const Expanded(
-                          child: Center(child: Text('No data available')));
+                          child:
+                              Center(child: Text('No hay datos disponibles')));
                     }
                   } else {
                     return const Expanded(
@@ -211,10 +206,42 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                   child: ElevatedButton(
                     onPressed: value != null && _montoController.text.isNotEmpty
                         ? () async {
-                            // await dataBaseProvider.updateOrder(cobroOrder.id!,
-                            //     totalOwned:
-                            //         "${int.parse("${int.parse(cobroOrder.totalOwned) - int.parse(_montoController.text)} ")}");
+                            double paymentAmount =
+                                double.parse(_montoController.text);
 
+                            // Create a new payment
+                            PagoModel newPago = PagoModel(
+                              date: DateFormat('MM/dd/yyyy')
+                                  .format(DateTime.now()),
+                              amount: paymentAmount,
+                            );
+
+                            // Add the new payment to the order's pagos list
+                            cobroOrder.pagos.add(newPago);
+
+                            // Subtract the payment amount from the total owed
+                            double newTotalOwed =
+                                (double.tryParse(cobroOrder.totalOwned) ??
+                                        0.0) -
+                                    paymentAmount;
+
+                            // Update the totalOwned amount
+                            cobroOrder = cobroOrder.copyWith(
+                                totalOwned: newTotalOwed.toString());
+
+                            // If the debt is fully paid, close the order
+                            if (newTotalOwed <= 0) {
+                              cobroOrder =
+                                  cobroOrder.copyWith(status: "cerrado");
+                            }
+
+                            // Update the order in the database
+                            await dataBaseProvider.updateOrderWithProducts(
+                                cobroOrder.id!,
+                                cobroOrder,
+                                cobroOrder.productList!);
+
+                            // Create a ticket for this payment
                             await dataBaseProvider.createOrderWithProducts(
                               OrderModel(
                                 pagos: [],
@@ -226,48 +253,30 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                 direccion: "",
                                 date: DateTime.now().toString(),
                                 comment: "",
-                                totalCost: double.parse(_montoController.text),
+                                totalCost: paymentAmount,
                               ),
                               cobroOrder.productList!,
                             );
 
                             final snackBar = SnackBar(
                               content: Text(
-                                'Has recibido un pago de ${cobroOrder.clientName} Correctamente',
+                                'Has recibido un pago de ${cobroOrder.clientName} correctamente',
                                 style: const TextStyle(
                                   fontSize: 16.0,
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              backgroundColor: Colors
-                                  .deepPurple, // Un color de fondo llamativo
-                              duration: const Duration(
-                                  seconds:
-                                      3), // Duración que el SnackBar será mostrado
-                              action: SnackBarAction(
-                                label: '',
-                                textColor: Colors
-                                    .amber, // Color llamativo para la acción
-                                onPressed: () {
-                                  // Código para deshacer la acción aquí
-                                },
-                              ),
-                              behavior: SnackBarBehavior
-                                  .floating, // Hace que el SnackBar "flote" sobre la UI
+                              backgroundColor: Colors.deepPurple,
+                              duration: const Duration(seconds: 3),
+                              behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
-                                // Forma personalizada
-                                borderRadius: BorderRadius.circular(
-                                    20.0), // Bordes redondeados
+                                borderRadius: BorderRadius.circular(20.0),
                               ),
-                              margin: const EdgeInsets.all(
-                                  10), // Margen alrededor del SnackBar
+                              margin: const EdgeInsets.all(10),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 24.0,
-                                  vertical: 12.0), // Ajusta el padding interno
+                                  horizontal: 24.0, vertical: 12.0),
                             );
-
-                            // Muestra el SnackBar
                             ScaffoldMessenger.of(context)
                                 .showSnackBar(snackBar);
                             setState(() {});
@@ -276,11 +285,45 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                         : _montoController.text.isNotEmpty &&
                                 _conceptoController.text.isNotEmpty
                             ? () async {
+                                double paymentAmount =
+                                    double.parse(_montoController.text);
+
+                                // Create a new payment
+                                PagoModel newPago = PagoModel(
+                                  date: DateFormat('MM/dd/yyyy')
+                                      .format(DateTime.now()),
+                                  amount: paymentAmount,
+                                );
+
+                                // Add the new payment to the order's pagos list
+                                cobroOrder.pagos.add(newPago);
+
+                                // Subtract the payment amount from the total owed
+                                double newTotalOwed =
+                                    (double.tryParse(cobroOrder.totalOwned) ??
+                                            0.0) -
+                                        paymentAmount;
+
+                                // Update the totalOwned amount
+                                cobroOrder = cobroOrder.copyWith(
+                                    totalOwned: newTotalOwed.toString());
+
+                                // If the debt is fully paid, close the order
+                                if (newTotalOwed <= 0) {
+                                  cobroOrder =
+                                      cobroOrder.copyWith(status: "cerrado");
+                                }
+
+                                // Update the order in the database
+                                await dataBaseProvider.updateOrderWithProducts(
+                                    cobroOrder.id!,
+                                    cobroOrder,
+                                    cobroOrder.productList!);
+
+                                // Create a ticket for this payment
                                 await dataBaseProvider.createOrderWithProducts(
                                   OrderModel(
                                     pagos: [],
-                                    orderNumber:
-                                        "", // Añadir el número de orden si es necesario
                                     totalOwned: "",
                                     margen: "",
                                     status: "Pago",
@@ -289,49 +332,30 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                     direccion: "",
                                     date: DateTime.now().toString(),
                                     comment: "",
-                                    totalCost:
-                                        double.parse(_montoController.text),
+                                    totalCost: paymentAmount,
                                   ),
                                   cobroOrder.productList!,
                                 );
+
                                 final snackBar = SnackBar(
                                   content: Text(
-                                    'Has recibido un pago de ${_conceptoController.text} Correctamente',
+                                    'Has recibido un pago de ${_conceptoController.text} correctamente',
                                     style: const TextStyle(
                                       fontSize: 16.0,
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  backgroundColor: Colors
-                                      .deepPurple, // Un color de fondo llamativo
-                                  duration: const Duration(
-                                      seconds:
-                                          3), // Duración que el SnackBar será mostrado
-                                  action: SnackBarAction(
-                                    label: '',
-                                    textColor: Colors
-                                        .amber, // Color llamativo para la acción
-                                    onPressed: () {
-                                      // Código para deshacer la acción aquí
-                                    },
-                                  ),
-                                  behavior: SnackBarBehavior
-                                      .floating, // Hace que el SnackBar "flote" sobre la UI
+                                  backgroundColor: Colors.deepPurple,
+                                  duration: const Duration(seconds: 3),
+                                  behavior: SnackBarBehavior.floating,
                                   shape: RoundedRectangleBorder(
-                                    // Forma personalizada
-                                    borderRadius: BorderRadius.circular(
-                                        20.0), // Bordes redondeados
+                                    borderRadius: BorderRadius.circular(20.0),
                                   ),
-                                  margin: const EdgeInsets.all(
-                                      10), // Margen alrededor del SnackBar
+                                  margin: const EdgeInsets.all(10),
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 24.0,
-                                      vertical:
-                                          12.0), // Ajusta el padding interno
+                                      horizontal: 24.0, vertical: 12.0),
                                 );
-
-                                // Muestra el SnackBar
                                 ScaffoldMessenger.of(context)
                                     .showSnackBar(snackBar);
                                 setState(() {});

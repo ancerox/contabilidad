@@ -399,7 +399,7 @@ class _StockScreenState extends State<StockScreen> {
                               : Item(
                                   subProducts: product.subProduct,
                                   magnitud: product.unit,
-                                  cost: product.cost,
+                                  cost: product.cost.toInt(),
                                   amount: product.amount,
                                   name: product.name,
                                   precio: product.unitPrice,

@@ -4,7 +4,7 @@ import 'package:contabilidad/consts.dart';
 import 'package:contabilidad/models/product_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/svg.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gradient_widgets/gradient_widgets.dart';
 
 class Item extends StatefulWidget {
@@ -18,13 +18,11 @@ class Item extends StatefulWidget {
   final VoidCallback? minus;
   final VoidCallback? plus;
   final List<ProductModel>? subProducts;
-
   final void Function(String)? unitPriceOnChange;
   final void Function(String)? quantityOnChange;
   final void Function(String)? costOnChange;
   final void Function(String)? onFieldSubmitted;
-
-  final double? cost;
+  final int? cost;
   final TextEditingController? costCTRController;
   final TextEditingController? quantityCTRController;
   final TextEditingController? unitPriceCTRController;
@@ -62,12 +60,17 @@ class _ItemState extends State<Item> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return ValueListenableBuilder(
         valueListenable: widget.quantity ?? ValueNotifier<int>(0),
         builder: (context, value, child) {
           return Container(
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            // height: size(context).height * 0.11,
+            margin: EdgeInsets.symmetric(
+              vertical: screenHeight * 0.01,
+              horizontal: screenWidth * 0.02,
+            ),
             decoration: BoxDecoration(
               gradient: value > 0 ? Gradients.backToFuture : null,
               color: value > 0
@@ -80,14 +83,16 @@ class _ItemState extends State<Item> {
               ),
             ),
             child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(minHeight: 100), // Adjust as needed
+              constraints: const BoxConstraints(minHeight: 100), // Ajustable
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.02,
+                      vertical: screenHeight * 0.01,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       crossAxisAlignment: widget.quantityCTRController == null
@@ -98,12 +103,11 @@ class _ItemState extends State<Item> {
                           children: [
                             widget.imagePath == "none"
                                 ? Container(
-                                    height: 50,
-                                    width: 50,
+                                    height: screenHeight * 0.07,
+                                    width: screenHeight * 0.07,
                                     decoration: BoxDecoration(
                                         image: const DecorationImage(
                                           scale: 17.0,
-                                          // fit: BoxFit.none,
                                           image: AssetImage(
                                               "assets/icons/icon.jpeg"),
                                         ),
@@ -112,8 +116,8 @@ class _ItemState extends State<Item> {
                                             BorderRadius.circular(10)),
                                   )
                                 : Container(
-                                    height: 40,
-                                    width: 40,
+                                    height: screenHeight * 0.07,
+                                    width: screenHeight * 0.07,
                                     decoration: BoxDecoration(
                                         image: DecorationImage(
                                           fit: BoxFit.fitHeight,
@@ -124,8 +128,8 @@ class _ItemState extends State<Item> {
                                         borderRadius:
                                             BorderRadius.circular(10)),
                                   ),
-                            const SizedBox(
-                              height: 5,
+                            SizedBox(
+                              height: screenHeight * 0.01,
                             ),
                             widget.subProducts == null
                                 ? Container()
@@ -139,8 +143,8 @@ class _ItemState extends State<Item> {
                                           });
                                         },
                                         child: Container(
-                                          height: 15,
-                                          width: 40,
+                                          height: screenHeight * 0.03,
+                                          width: screenWidth * 0.15,
                                           decoration: BoxDecoration(
                                             color: isDetailedPressed
                                                 ? const Color.fromARGB(
@@ -162,185 +166,193 @@ class _ItemState extends State<Item> {
                                       )
                           ],
                         ),
-                        const SizedBox(
-                          width: 10,
+                        SizedBox(
+                          width: screenWidth * 0.03,
                         ),
                         widget.costCTRController == null
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.name,
-                                    overflow: TextOverflow
-                                        .ellipsis, // Use ellipsis to indicate truncation
-                                    style: subtitles.copyWith(
-                                        color: Colors.black, fontSize: 15),
-                                  ),
-                                  widget.unitPriceCTRController != null
-                                      ? Container()
-                                      : Text(
-                                          "Costo: ${widget.cost.toString()} ${widget.magnitud}",
-                                          overflow: TextOverflow
-                                              .ellipsis, // Changed to ellipsis to indicate text truncation more clearly
-                                          style: subtitles.copyWith(
-                                              color: Colors.black,
-                                              fontSize: 15),
-                                        ),
-                                  widget.unitPriceCTRController == null
-                                      ? Container()
-                                      : Row(
-                                          children: [
-                                            Container(
-                                              decoration: const BoxDecoration(
-                                                  color: Color.fromARGB(
-                                                      255, 235, 235, 235)),
-                                              height: 30,
-                                              width:
-                                                  70, // Define un ancho específico para el Container
-                                              child: TextFormField(
-                                                onChanged: widget.costOnChange,
-                                                maxLines: 1,
-                                                textAlign: TextAlign.left,
-                                                inputFormatters: <TextInputFormatter>[
-                                                  FilteringTextInputFormatter
-                                                      .digitsOnly, // Acepta solo dígitos
-                                                ],
-                                                style: const TextStyle(
-                                                    overflow:
-                                                        TextOverflow.visible,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16),
-                                                controller: widget
-                                                    .unitPriceCTRController,
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                decoration:
-                                                    const InputDecoration(
-                                                        isDense: true,
-                                                        contentPadding:
-                                                            EdgeInsets.fromLTRB(
-                                                                2.0,
-                                                                2.0,
-                                                                2.0,
-                                                                2.0),
-                                                        border:
-                                                            InputBorder.none),
-                                              ),
-                                            ),
-                                            Container(
-                                              decoration: const BoxDecoration(
-                                                  color: Color.fromARGB(
-                                                      255, 235, 235, 235)),
-                                              height: 30,
-                                              width: 20,
-                                              child: const Center(
-                                                child: Text(
-                                                  "\$",
+                            ? Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: subtitles.copyWith(
+                                          color: Colors.black,
+                                          fontSize: screenHeight * 0.02),
+                                    ),
+                                    widget.unitPriceCTRController != null
+                                        ? Container()
+                                        : Text(
+                                            "Costo: ${widget.cost.toString()} ${widget.magnitud}",
+                                            overflow: TextOverflow.ellipsis,
+                                            style: subtitles.copyWith(
+                                                color: Colors.black,
+                                                fontSize: screenHeight * 0.018),
+                                          ),
+                                    widget.unitPriceCTRController == null
+                                        ? Container()
+                                        : Row(
+                                            children: [
+                                              Container(
+                                                decoration: const BoxDecoration(
+                                                    color: Color.fromARGB(
+                                                        255, 235, 235, 235)),
+                                                height: screenHeight * 0.04,
+                                                width: screenWidth * 0.18,
+                                                child: TextFormField(
+                                                  onChanged:
+                                                      widget.costOnChange,
+                                                  maxLines: 1,
+                                                  textAlign: TextAlign.left,
+                                                  inputFormatters: <TextInputFormatter>[
+                                                    FilteringTextInputFormatter
+                                                        .digitsOnly,
+                                                  ],
                                                   style: TextStyle(
+                                                      overflow:
+                                                          TextOverflow.visible,
                                                       fontWeight:
-                                                          FontWeight.bold),
+                                                          FontWeight.bold,
+                                                      fontSize:
+                                                          screenHeight * 0.02),
+                                                  controller: widget
+                                                      .unitPriceCTRController,
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  decoration:
+                                                      const InputDecoration(
+                                                          isDense: true,
+                                                          contentPadding:
+                                                              EdgeInsets
+                                                                  .fromLTRB(
+                                                                      2.0,
+                                                                      2.0,
+                                                                      2.0,
+                                                                      2.0),
+                                                          border:
+                                                              InputBorder.none),
                                                 ),
                                               ),
-                                            )
-                                          ],
-                                        ),
-                                  widget.unitPriceCTRController == null
-                                      ? Container()
-                                      : Text(
-                                          "Costo: ${widget.cost.toString()}",
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w500),
-                                        ),
-                                ],
+                                              Container(
+                                                decoration: const BoxDecoration(
+                                                    color: Color.fromARGB(
+                                                        255, 235, 235, 235)),
+                                                height: screenHeight * 0.04,
+                                                width: screenWidth * 0.05,
+                                                child: const Center(
+                                                  child: Text(
+                                                    "\$",
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold),
+                                                  ),
+                                                ),
+                                              )
+                                            ],
+                                          ),
+                                    widget.unitPriceCTRController == null
+                                        ? Container()
+                                        : Text(
+                                            "Costo: ${widget.cost.toString()}",
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w500),
+                                          ),
+                                  ],
+                                ),
                               )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.name,
-                                    style: subtitles.copyWith(
-                                        color: Colors.black, fontSize: 15),
-                                  ),
-                                  widget.costCTRController == null
-                                      ? widget.quantityCTRController == null
-                                          ? Text(
-                                              "\$${widget.amount == 0 ? widget.cost : widget.amount! * widget.cost!} DOP",
-                                              textAlign: TextAlign.start,
-                                              style: subtitles.copyWith(
-                                                  color: Colors.black,
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w400),
-                                            )
-                                          : Container()
-                                      : Row(
-                                          children: [
-                                            Container(
-                                              decoration: const BoxDecoration(
-                                                  color: Color.fromARGB(
-                                                      255, 235, 235, 235)),
-                                              height: 35,
-                                              width:
-                                                  40, // Define un ancho específico para el Container
-                                              child: TextFormField(
-                                                onChanged: widget.costOnChange,
-                                                maxLines: 1,
-                                                textAlign: TextAlign.left,
-                                                inputFormatters: <TextInputFormatter>[
-                                                  FilteringTextInputFormatter
-                                                      .digitsOnly, // Acepta solo dígitos
-                                                ],
-                                                style: const TextStyle(
-                                                    overflow:
-                                                        TextOverflow.visible,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16),
-                                                controller:
-                                                    widget.costCTRController,
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                decoration:
-                                                    const InputDecoration(
-                                                        isDense: true,
-                                                        contentPadding:
-                                                            EdgeInsets.fromLTRB(
-                                                                2.0,
-                                                                2.0,
-                                                                2.0,
-                                                                2.0),
-                                                        border:
-                                                            InputBorder.none),
-                                              ),
-                                            ),
-                                            Container(
-                                              decoration: const BoxDecoration(
-                                                  color: Color.fromARGB(
-                                                      255, 235, 235, 235)),
-                                              height: 35,
-                                              width: 50,
-                                              child: const Center(
-                                                child: Text(
-                                                  "DOP",
+                            : Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.name,
+                                      style: subtitles.copyWith(
+                                          color: Colors.black,
+                                          fontSize: screenHeight * 0.02),
+                                    ),
+                                    widget.costCTRController == null
+                                        ? widget.quantityCTRController == null
+                                            ? Text(
+                                                "\$${widget.amount == 0 ? widget.cost : widget.amount! * widget.cost!} DOP",
+                                                textAlign: TextAlign.start,
+                                                style: subtitles.copyWith(
+                                                    color: Colors.black,
+                                                    fontSize:
+                                                        screenHeight * 0.018,
+                                                    fontWeight:
+                                                        FontWeight.w400),
+                                              )
+                                            : Container()
+                                        : Row(
+                                            children: [
+                                              ConstrainedBox(
+                                                constraints: BoxConstraints(
+                                                    maxWidth:
+                                                        screenWidth * 0.15),
+                                                child: TextFormField(
+                                                  onChanged:
+                                                      widget.costOnChange,
+                                                  maxLines: 1,
+                                                  textAlign: TextAlign.left,
+                                                  inputFormatters: <TextInputFormatter>[
+                                                    FilteringTextInputFormatter
+                                                        .digitsOnly,
+                                                  ],
                                                   style: TextStyle(
+                                                      overflow:
+                                                          TextOverflow.visible,
                                                       fontWeight:
-                                                          FontWeight.bold),
+                                                          FontWeight.bold,
+                                                      fontSize:
+                                                          screenHeight * 0.02),
+                                                  controller:
+                                                      widget.costCTRController,
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  decoration:
+                                                      const InputDecoration(
+                                                          isDense: true,
+                                                          contentPadding:
+                                                              EdgeInsets
+                                                                  .fromLTRB(
+                                                                      2.0,
+                                                                      2.0,
+                                                                      2.0,
+                                                                      2.0),
+                                                          border:
+                                                              InputBorder.none),
                                                 ),
                                               ),
-                                            )
-                                          ],
-                                        ),
-                                  Text(
-                                    "Costo total ${widget.cost! * widget.quantity!.value}",
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
-                                  )
-                                ],
+                                              Container(
+                                                decoration:
+                                                    const BoxDecoration(),
+                                                height: screenHeight * 0.04,
+                                                width: screenWidth * 0.1,
+                                                child: const Center(
+                                                  child: Text(
+                                                    "DOP",
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold),
+                                                  ),
+                                                ),
+                                              )
+                                            ],
+                                          ),
+                                    Text(
+                                      "Costo total ${widget.cost! * widget.quantity!.value}",
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: screenHeight * 0.018),
+                                    )
+                                  ],
+                                ),
                               ),
-                        // const Spacer(),
                         widget.hasTrailing == true
                             ? Container(
-                                // height: 40,
-                                width: size(context).width * 0.38,
+                                width: screenWidth * 0.4,
                                 decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(20),
                                     color: const Color.fromARGB(
@@ -356,58 +368,60 @@ class _ItemState extends State<Item> {
                                         width: 10,
                                       ),
                                     ),
-                                    ValueListenableBuilder(
-                                      valueListenable: widget.quantity!,
-                                      builder: (context, value, child) {
-                                        Future.microtask(() {
-                                          if (mounted) {
-                                            widget.quantityCTRController!.text =
-                                                value.toString();
-                                          }
-                                        });
-                                        return Container(
-                                          decoration: const BoxDecoration(
-                                              color: Color.fromARGB(
-                                                  255, 235, 235, 235)),
-                                          height: 30,
-                                          width:
-                                              30, // Define un ancho específico para el Container
-                                          child: TextFormField(
-                                            onChanged: widget.quantityOnChange,
-                                            maxLines: 1,
-                                            textAlign: TextAlign.left,
-                                            inputFormatters: <TextInputFormatter>[
-                                              FilteringTextInputFormatter
-                                                  .digitsOnly, // Acepta solo dígitos
-                                            ],
-                                            style: const TextStyle(
-                                                overflow: TextOverflow.visible,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16),
-                                            controller:
-                                                widget.quantityCTRController,
-                                            keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                                isDense: true,
-                                                contentPadding:
-                                                    EdgeInsets.fromLTRB(
-                                                        2.0, 2.0, 2.0, 2.0),
-                                                border: InputBorder.none),
-                                          ),
-                                        );
-                                      },
+                                    Flexible(
+                                      child: ValueListenableBuilder(
+                                        valueListenable: widget.quantity!,
+                                        builder: (context, value, child) {
+                                          Future.microtask(() {
+                                            if (mounted) {
+                                              widget.quantityCTRController!
+                                                  .text = value.toString();
+                                            }
+                                          });
+                                          return ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              maxWidth: screenWidth * 0.15,
+                                            ),
+                                            child: TextFormField(
+                                              onChanged:
+                                                  widget.quantityOnChange,
+                                              maxLines: 1,
+                                              textAlign: TextAlign.center,
+                                              inputFormatters: <TextInputFormatter>[
+                                                FilteringTextInputFormatter
+                                                    .digitsOnly,
+                                              ],
+                                              style: TextStyle(
+                                                  overflow:
+                                                      TextOverflow.visible,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize:
+                                                      screenHeight * 0.02),
+                                              controller:
+                                                  widget.quantityCTRController,
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: const InputDecoration(
+                                                  isDense: true,
+                                                  contentPadding:
+                                                      EdgeInsets.fromLTRB(
+                                                          2.0, 2.0, 2.0, 2.0),
+                                                  border: InputBorder.none),
+                                            ),
+                                          );
+                                        },
+                                      ),
                                     ),
                                     Container(
-                                      decoration: const BoxDecoration(
-                                          color: Color.fromARGB(
-                                              255, 235, 235, 235)),
-                                      height: 30,
-                                      width: 30,
+                                      decoration: const BoxDecoration(),
+                                      height: screenHeight * 0.04,
+                                      width: screenWidth * 0.1,
                                       child: Center(
                                         child: Text(
                                           widget.magnitud!.substring(0, 3),
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold),
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: screenHeight * 0.018),
                                         ),
                                       ),
                                     ),
@@ -426,25 +440,28 @@ class _ItemState extends State<Item> {
                                   Text(
                                     widget.amount.toString(),
                                     style: subtitles.copyWith(
-                                        color: Colors.black, fontSize: 15),
+                                        color: Colors.black,
+                                        fontSize: screenHeight * 0.018),
                                   ),
-                                  Text("Artciulos",
+                                  Text("Artículos",
                                       style: subtitles.copyWith(
-                                          color: Colors.black, fontSize: 15)),
+                                          color: Colors.black,
+                                          fontSize: screenHeight * 0.018)),
                                 ],
                               ),
                       ],
                     ),
                   ),
                   isDetailedPressed
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ? Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: screenWidth * 0.05),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: widget.subProducts!.map((subProduct) {
                               return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 5),
+                                padding: EdgeInsets.symmetric(
+                                    vertical: screenHeight * 0.005),
                                 child: Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceEvenly,
@@ -453,31 +470,32 @@ class _ItemState extends State<Item> {
                                       flex: 1,
                                       child: Text(
                                         subProduct.quantity!.value.toString(),
-                                        style: const TextStyle(
-                                            overflow: TextOverflow
-                                                .ellipsis), // Prevents text overflow.
+                                        style: TextStyle(
+                                          overflow: TextOverflow.ellipsis,
+                                          fontSize: screenHeight * 0.018,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(
-                                        width: 10), // Space between columns
+                                    const SizedBox(width: 10),
                                     Expanded(
                                       flex: 1,
                                       child: Text(
                                         subProduct.unit,
-                                        style: const TextStyle(
-                                            overflow: TextOverflow
-                                                .ellipsis), // Prevents text overflow.
+                                        style: TextStyle(
+                                          overflow: TextOverflow.ellipsis,
+                                          fontSize: screenHeight * 0.018,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(
-                                        width: 40), // Space between columns
+                                    const SizedBox(width: 40),
                                     Expanded(
                                       flex: 1,
                                       child: Text(
                                         "${subProduct.name} ${subProduct.cost * subProduct.quantity!.value} DOP",
-                                        style: const TextStyle(
-                                            overflow: TextOverflow
-                                                .ellipsis), // Prevents text overflow.
+                                        style: TextStyle(
+                                          overflow: TextOverflow.ellipsis,
+                                          fontSize: screenHeight * 0.018,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -510,10 +528,13 @@ class CardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Container(
-      padding: const EdgeInsets.all(10),
-      height: 90,
-      width: 185,
+      padding: EdgeInsets.all(screenHeight * 0.015),
+      height: screenHeight * 0.12,
+      width: screenWidth * 0.45,
       decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15), gradient: gradient),
       child: Column(
@@ -522,11 +543,11 @@ class CardWidget extends StatelessWidget {
         children: [
           Text(
             inventary,
-            style: subtitles.copyWith(fontSize: 20),
+            style: subtitles.copyWith(fontSize: screenHeight * 0.025),
           ),
           Text(
             title,
-            style: subtitles.copyWith(fontSize: 12),
+            style: subtitles.copyWith(fontSize: screenHeight * 0.015),
           ),
         ],
       ),

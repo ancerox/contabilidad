@@ -4,16 +4,30 @@ import 'dart:io';
 import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:path/path.dart' as path;
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sqflite/sqflite.dart';
 
 class DataBase extends ChangeNotifier {
-  ValueNotifier<double> totalPriceNotifier = ValueNotifier<double>(0);
+  final ValueNotifier<double> _totalPriceNotifier = ValueNotifier<double>(0.0);
+
+  ValueNotifier<double> get totalPriceNotifier => _totalPriceNotifier;
+
+  double get totalPrice => _totalPriceNotifier.value;
+
+  set totalPrice(double value) {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _totalPriceNotifier.value = value;
+    });
+  }
+
   ValueNotifier<int> quantityNotifier = ValueNotifier(0);
   ValueNotifier<DateRange> dateRange = ValueNotifier(DateRange());
 
@@ -65,6 +79,204 @@ class DataBase extends ChangeNotifier {
       },
       version: 6, // Increment the version of the database
     );
+  }
+
+  List<OrderModel> _orders = [];
+  String _selectedStatus = 'historial';
+  String _filterText = '';
+  String _filterBy = 'Nombre'; // Aquí definimos el campo _filterBy
+
+  // Getters para acceder a las variables privadas
+  List<OrderModel> get orders => _orders;
+  String get selectedStatus => _selectedStatus;
+  String get filterText => _filterText;
+  String get filterBy => _filterBy; // Este es el getter que falta
+
+  // Setters para actualizar las variables y notificar cambios
+  void setOrders(List<OrderModel> orders) {
+    _orders = orders;
+    notifyListeners();
+  }
+
+  void setSelectedStatus(String status) {
+    _selectedStatus = status;
+    notifyListeners();
+  }
+
+  void setFilterText(String text) {
+    _filterText = text;
+    notifyListeners();
+  }
+
+  void setFilterBy(String filter) {
+    // Este setter actualiza _filterBy
+    _filterBy = filter;
+    notifyListeners();
+  }
+
+  // Filtrar órdenes según el texto y el tipo de filtro seleccionados
+  List<OrderModel> get filteredOrders {
+    List<OrderModel> filteredOrderList = _orders.where((OrderModel order) {
+      return order.status == _selectedStatus || _selectedStatus == "historial";
+    }).toList();
+
+    if (_filterText.isNotEmpty) {
+      filteredOrderList = _orders.where((OrderModel order) {
+        switch (_filterBy) {
+          case 'Fecha':
+            return order.date.toLowerCase().contains(_filterText.toLowerCase());
+          case 'Número de orden':
+            return order.id.toString().contains(_filterText);
+          case 'Producto':
+            return order.productList?.any((product) => product.name
+                    .toLowerCase()
+                    .contains(_filterText.toLowerCase())) ??
+                false;
+          case 'Estatus':
+            return order.status
+                .toLowerCase()
+                .contains(_filterText.toLowerCase());
+          case 'Nombre':
+          default:
+            return order.clientName
+                .toLowerCase()
+                .contains(_filterText.toLowerCase());
+        }
+      }).toList();
+    }
+
+    return filteredOrderList;
+  }
+
+  Future<void> exportToCsv(
+      BuildContext context, List<OrderModel> orders) async {
+    try {
+      // Prompt the user to select a directory
+      String? directoryPath = await FilePicker.platform.getDirectoryPath();
+
+      if (directoryPath == null) {
+        // User canceled the picker
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Export canceled')),
+        );
+        return;
+      }
+
+      List<List<String>> csvData = [
+        // Header row
+        <String>['Order ID', 'Client Name', 'Status', 'Date', 'Total Cost'],
+        // Data rows
+        ...orders.map((order) => [
+              order.id.toString(),
+              order.clientName,
+              order.status,
+              order.date,
+              order.totalCost.toString(),
+            ])
+      ];
+
+      String csv = const ListToCsvConverter().convert(csvData);
+
+      // Save file to the selected directory
+      final String path = '$directoryPath/orders.csv';
+
+      final File file = File(path);
+      await file.writeAsString(csv);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('CSV file saved to $path')),
+      );
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export CSV: $e')),
+      );
+    }
+  }
+
+  Future<void> exportToExcel(
+      BuildContext context, List<OrderModel> orders) async {
+    try {
+      // Prompt the user to select a directory
+      String? directoryPath = await FilePicker.platform.getDirectoryPath();
+
+      if (directoryPath == null) {
+        // User canceled the picker
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Export canceled')),
+        );
+        return;
+      }
+
+      var excel = Excel.createExcel();
+
+      // Create a sheet
+      Sheet sheetObject = excel['Orders'];
+
+      // Header row
+      sheetObject.appendRow([
+        'Order ID',
+        'Client Name',
+        'Status',
+        'Date',
+        'Total Cost',
+      ]);
+
+      // Data rows
+      for (var order in orders) {
+        sheetObject.appendRow([
+          order.id.toString(),
+          order.clientName,
+          order.status,
+          order.date,
+          order.totalCost.toString(),
+        ]);
+      }
+
+      // Save the file to the selected directory
+      final String path = '$directoryPath/orders.xlsx';
+
+      excel.save(fileName: path);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Excel file saved to $path')),
+      );
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export Excel: $e')),
+      );
+    }
+  }
+
+  Future<bool> handleStoragePermission() async {
+    // Check the current permission status
+    var status = await Permission.storage.status;
+
+    // If the permission is granted, return true
+    if (status.isGranted) {
+      return true;
+    }
+
+    // If permission is denied permanently (user selected "Don't ask again"), show a dialog to open app settings
+    else if (status.isPermanentlyDenied) {
+      bool isOpened = await openAppSettings();
+      return isOpened; // Return the result of opening app settings
+    }
+
+    // If permission is denied or restricted, request permission
+    else {
+      status = await Permission.storage.request();
+
+      if (status.isGranted) {
+        return true;
+      } else {
+        // Permission is denied, handle accordingly (maybe show a message to the user)
+        return false;
+      }
+    }
   }
 
   Future<ProductModel?> getProductById(int id) async {
@@ -124,13 +336,26 @@ class DataBase extends ChangeNotifier {
   Future<void> updateProductAmount(int id, int newAmount) async {
     final db = await getDatabase();
 
-    await db.update(
-      'products',
-      {'amount': newAmount},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    notifyListeners();
+    try {
+      // Realizar una operación de actualización en la tabla 'products'
+      int result = await db.update(
+        'products',
+        {'amount': newAmount},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      // Verificar si la actualización fue exitosa
+      if (result > 0) {
+        print('Cantidad actualizada correctamente para el producto con ID $id');
+      } else {
+        print('No se encontró el producto con ID $id para actualizar');
+      }
+
+      notifyListeners();
+    } catch (e) {
+      print('Error actualizando la cantidad del producto: $e');
+    }
   }
 
   Future<void> updateProductCost(int id, double newCost) async {
@@ -240,12 +465,37 @@ class DataBase extends ChangeNotifier {
 
   Future<void> updateProduct(ProductModel product) async {
     final db = await getDatabase();
-    await db.update(
+
+    // Retrieve the existing product from the database to get the current subProducts
+    final existingProductMap = await db.query(
       'products',
-      product.toMap(),
       where: 'id = ?',
       whereArgs: [product.id],
     );
+
+    if (existingProductMap.isNotEmpty) {
+      final existingProduct = ProductModel.fromMap(existingProductMap.first);
+
+      // Preserve the existing subProducts if the new product has them empty or null
+      final updatedSubProducts =
+          product.subProduct ?? existingProduct.subProduct;
+
+      // Convert the list of subproducts to a list of maps for JSON encoding
+      final encodedSubProducts =
+          updatedSubProducts?.map((subProduct) => subProduct.toMap()).toList();
+
+      // Convert the product to a map and update it
+      final updatedProductMap = product.toMap();
+      updatedProductMap['subProduct'] = jsonEncode(encodedSubProducts);
+
+      await db.update(
+        'products',
+        updatedProductMap,
+        where: 'id = ?',
+        whereArgs: [product.id],
+      );
+    }
+
     notifyListeners();
   }
 
@@ -463,8 +713,9 @@ class DataBase extends ChangeNotifier {
             );
           }
 
-          // Update datesUsed field for the product
-          if (product.datesUsed != null) {
+          // Ensure datesUsed is correctly updated (overwritten, not appended)
+          if (product.datesUsed != null && product.datesUsed!.isNotEmpty) {
+            // Overwrite the datesUsed field directly, not just updating or appending
             await txn.update(
               'products',
               {

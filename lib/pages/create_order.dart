@@ -61,7 +61,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   Map<int, DateTime?> startDays = {};
   Map<int, DateTime?> endDays = {};
   Map<int, RangeSelectionMode> rangeSelectionModes = {};
-  int? _orderNumber;
+  int _orderNumber = 0;
 
   Map<int, ValueNotifier<int>> productQuantities = {};
   bool isOrdenExpress = false;
@@ -146,9 +146,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   Future<void> _fetchNextOrderNumber() async {
     final nextOrderNumber = await dataBaseProvider.getTotalOrdersCount();
-    setState(() {
-      _orderNumber = nextOrderNumber;
-    });
+
+    if (nextOrderNumber == 0) {
+      setState(() {
+        _orderNumber = 1;
+      });
+      return;
+    }
+    _orderNumber = nextOrderNumber + 1;
+    setState(() {});
   }
 
   void _selectDate(
@@ -235,36 +241,28 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       if (widget.isEditPage && widget.order != null) {
         order.id = orderId;
-        await dataBaseProvider.updateOrderWithProducts(
-            widget.order!.id!, order, listProducts);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Orden actualizada con éxito')),
-        );
-        Navigator.pop(context, true);
-        return;
-      } else {
-        final earningsCommodities = dataBaseProvider.selectedCommodities.value
-            .fold(0.0, (sum, product) {
-          return sum + (product.unitPrice * product.quantity!.value);
-        });
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OrderCreatedScreen(
-              isEditPage: widget.isEditPage,
-              orderId: widget.isEditPage ? widget.order!.id! : order.id ?? 0,
-              totalOwned: totalOwnedGlobal,
-              orderNumber: _orderNumber!,
-              totalPrice: dataBaseProvider.totalPriceNotifier.value +
-                  earningsCommodities,
-              markedDays: productDateRanges.values.expand((e) => e).toList(),
-              orderModel: order,
-              productModelList: listProducts,
-            ),
-          ),
-        );
-        return;
       }
+      final earningsCommodities =
+          dataBaseProvider.selectedCommodities.value.fold(0.0, (sum, product) {
+        return sum + (product.unitPrice * product.quantity!.value);
+      });
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OrderCreatedScreen(
+            isEditPage: widget.isEditPage,
+            orderId: widget.isEditPage ? widget.order!.id! : order.id ?? 0,
+            totalOwned: totalOwnedGlobal,
+            orderNumber: _orderNumber,
+            totalPrice:
+                dataBaseProvider.totalPriceNotifier.value + earningsCommodities,
+            markedDays: productDateRanges.values.expand((e) => e).toList(),
+            orderModel: order,
+            productModelList: listProducts,
+          ),
+        ),
+      );
+      return;
     }
   }
 
@@ -283,7 +281,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
     if (widget.isEditPage && widget.order != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        dataBaseProvider.totalPriceNotifier.notifyListeners();
         _initializeEditOrder();
+        setState(() {});
       });
     }
   }
@@ -293,6 +293,19 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     dataBaseProvider.selectedProductsNotifier.value =
         widget.order!.productList!;
     dataBaseProvider.selectedCommodities.value = widget.order!.adminExpenses!;
+
+    if (widget.order!.datesInUse != null) {
+      dataBaseProvider.dateRangeMap =
+          widget.order!.datesInUse!.map((key, value) {
+        // Convert the int key to a string key
+
+        DateRange dateRange =
+            value.first; // Assuming you want the first DateRange in the list
+        return MapEntry(dateRange.id!, dateRange);
+      });
+      print("${dataBaseProvider.dateRangeMap} teste");
+    }
+
     _calculateTotalPrice();
 // widget.order!.datesInUse
 
@@ -540,6 +553,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           children: [
                             if (_selectedOption == 'Alquiler')
                               AlquilerWidget(
+                                startDays: startDays,
+                                endDays: endDays,
                                 isEditPage: widget.isEditPage,
                                 selectedDay: _focusedDay,
                                 showCalendar: showCalendar,
@@ -573,7 +588,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                         double totalPrice =
                                             quantity * unitPrice;
                                         double totalcost =
-                                            product.cost * quantity;
+                                            product.cost.toDouble() * quantity;
 
                                         unitPriceControllers.text =
                                             totalPrice.toString();
@@ -582,15 +597,14 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                           subProducts: product.subProduct,
                                           costOnChange: (String value) {
                                             if (value != "") {
-                                              product.cost =
-                                                  double.parse(value);
+                                              product.cost = int.parse(value);
                                               _calculateTotalPrice();
                                             }
                                           },
                                           onFieldSubmitted: (String value) {
                                             setState(() {});
                                           },
-                                          cost: totalcost,
+                                          cost: totalcost.toInt(),
                                           imagePath: product.file!,
                                           name: product.name,
                                           precio: product.unitPrice,
@@ -873,6 +887,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           children: [
                             if (_selectedOption == 'Alquiler')
                               AlquilerWidget(
+                                startDays: startDays,
+                                endDays: endDays,
                                 isEditPage: widget.isEditPage,
                                 selectedDay: _focusedDay,
                                 showCalendar: showCalendar,
@@ -912,8 +928,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
                                             double totalPrice =
                                                 quantity * unitPrice;
-                                            double totalcost =
-                                                product.cost * quantity;
+                                            int totalcost =
+                                                product.cost.toInt() * quantity;
 
                                             unitPriceControllers.text =
                                                 totalPrice.toString();
@@ -923,7 +939,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                               costOnChange: (String value) {
                                                 if (value != "") {
                                                   product.cost =
-                                                      double.parse(value);
+                                                      int.parse(value);
                                                   _calculateTotalPrice();
                                                 }
                                               },
@@ -1118,9 +1134,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                               selectedProducts
                                                                   .fold(0, (summ,
                                                                       product) {
-                                                                final dateRanges =
-                                                                    product.datesUsed ??
-                                                                        [];
                                                                 // final totalDays =
                                                                 //    data dateRanges.fold(
                                                                 //         0,
@@ -1207,7 +1220,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                                     productCost)
                                                                 .toInt();
                                                       });
-
+                                                      margin = alquilerTotal;
                                                       return Text(
                                                         _selectedOption ==
                                                                 'Alquiler'
@@ -1518,25 +1531,54 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       },
                       calendarBuilders: CalendarBuilders(
                         defaultBuilder: (context, day, focusedDay) {
-                          if (product.datesUsed != null &&
-                              product.datesUsed!.any((element) =>
-                                  (day.isAfter(element.start!) &&
+                          if (product.datesUsed != null) {
+                            bool isFullyBooked = false;
+                            bool isPartiallyBooked = false;
+                            int totalBorrowed = 0;
+
+                            for (var element in product.datesUsed!) {
+                              if ((day.isAfter(element.start!) &&
                                       day.isBefore(element.end!)) ||
                                   day == element.start ||
-                                  day == element.end)) {
-                            return Container(
-                              margin: const EdgeInsets.all(6.0),
-                              alignment: Alignment.center,
-                              decoration: const BoxDecoration(
-                                color:
-                                    Colors.grey, // Background color for the day
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                '${day.day}',
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                            );
+                                  day == element.end) {
+                                totalBorrowed += element.borrowQuantity ?? 0;
+                                if (totalBorrowed >= product.amount) {
+                                  isFullyBooked = true;
+                                } else if (totalBorrowed > 0) {
+                                  isPartiallyBooked = true;
+                                }
+                              }
+                            }
+
+                            if (isFullyBooked) {
+                              return Container(
+                                margin: const EdgeInsets.all(6.0),
+                                alignment: Alignment.center,
+                                decoration: const BoxDecoration(
+                                  color: Colors
+                                      .grey, // Background color for fully booked days
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${day.day}',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              );
+                            } else if (isPartiallyBooked) {
+                              return Container(
+                                margin: const EdgeInsets.all(6.0),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(
+                                      0.5), // Background color for partially booked days
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${day.day}',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              );
+                            }
                           }
                           return null;
                         },
@@ -1647,6 +1689,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                               setState(() {
                                 const uuid = Uuid();
                                 // Clear all existing date ranges for this product
+
                                 selectedDateRanges.clear();
 
                                 // Create a new DateRange
