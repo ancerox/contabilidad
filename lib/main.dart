@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/pages/history.dart';
 import 'package:contabilidad/pages/home_page.dart';
@@ -70,79 +69,8 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
           useMaterial3: true,
         ),
-        home: const AccessCheckerScreen(), // Access check added here
+        home: const HomePage(), // Access check added here
       ),
-    );
-  }
-}
-
-class AccessCheckerScreen extends StatefulWidget {
-  const AccessCheckerScreen({super.key});
-
-  @override
-  _AccessCheckerScreenState createState() => _AccessCheckerScreenState();
-}
-
-class _AccessCheckerScreenState extends State<AccessCheckerScreen> {
-  late Stream<DocumentSnapshot<Map<String, dynamic>>> accessStream;
-
-  @override
-  void initState() {
-    super.initState();
-    accessStream = FirebaseFirestore.instance
-        .collection('access')
-        .doc('3ANSo2ladkNe2hwdpvvt') // Replace with your actual document ID
-        .snapshots();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: accessStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          ); // Show a loading screen while checking access
-        }
-
-        try {
-          if (snapshot.hasError) {
-            throw snapshot.error!;
-          }
-
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return Scaffold(
-              body: Container(
-                color: Colors.white,
-              ), // Show a white screen if access is denied or an error occurs
-            );
-          }
-
-          bool access = snapshot.data!.data()?['IsAccess'] ?? false;
-          if (!access) {
-            return Scaffold(
-              body: Container(
-                color: Colors.white,
-              ), // Show a white screen if access is denied
-            );
-          } else {
-            return const SubscriptionScreen(); // Proceed to the actual app if access is granted
-          }
-        } catch (e) {
-          print("Error in access stream: $e");
-          return const Scaffold(
-            body: Center(
-              child: Text(
-                'An error occurred while checking access.',
-                style: TextStyle(color: Colors.red, fontSize: 18),
-              ),
-            ),
-          );
-        }
-      },
     );
   }
 }
