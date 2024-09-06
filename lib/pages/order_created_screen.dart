@@ -10,10 +10,11 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 class OrderCreatedScreen extends StatefulWidget {
+  final String selectedOption;
   final bool isEditPage;
   final String totalOwned;
   final int orderNumber;
-  final int orderId;
+  final String orderId;
   final double totalPrice;
   final List<DateRange> markedDays;
   final OrderModel orderModel;
@@ -21,6 +22,7 @@ class OrderCreatedScreen extends StatefulWidget {
 
   const OrderCreatedScreen({
     super.key,
+    required this.selectedOption,
     required this.totalOwned,
     required this.isEditPage,
     required this.totalPrice,
@@ -46,19 +48,6 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // double totalPrice = 0.0;
-
-    // for (var product in widget.productModelList) {
-    //   if (widget.markedDays.isNotEmpty) {
-    //     int totalDays = widget.markedDays.fold(0, (int sum, DateRange range) {
-    //       return sum + (range.end!.difference(range.start!).inDays + 1);
-    //     });
-    //     totalPrice += totalDays * product.unitPrice;
-    //   } else {
-    //     totalPrice += product.unitPrice * product.quantity!.value;
-    //   }
-    // }
-
     ThemeData theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +78,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     children: [
                       _buildHeaderDetail(
                           'ID del Pedido:',
-                          widget.orderNumber.toString() ?? "No disponible",
+                          widget.orderModel.orderId ?? "No disponible",
                           Icons.confirmation_num),
                       _buildHeaderDetail('Cliente:',
                           widget.orderModel.clientName, Icons.person),
@@ -168,6 +157,23 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                             ),
                           ),
                         )),
+              const SizedBox(height: 20),
+              // Lista de pagos
+              if (widget.orderModel.pagos.isNotEmpty)
+                Text('Pagos:', style: theme.textTheme.titleLarge),
+              if (widget.orderModel.pagos.isNotEmpty)
+                ...widget.orderModel.pagos.map((pago) => Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListTile(
+                        leading: Icon(Icons.payment, color: theme.primaryColor),
+                        title: Text(
+                            "Pago de \$${pago.amount.toStringAsFixed(2)} el ${pago.date}"),
+                      ),
+                    )),
               if (widget.orderModel.comment.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
@@ -196,10 +202,121 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     ),
                   ),
                   onPressed: () async {
+                    if (widget.orderModel.pagos.isNotEmpty) {
+                      if (!widget.isEditPage) {
+                        for (var pago in widget.orderModel.pagos) {
+                          // Only create the pago if it doesn't exist in the current order's pagos
+                          await dataBaseProvider.createOrderWithProducts(
+                            OrderModel(
+                              orderId:
+                                  "Pago ${widget.orderModel.pagos.length} ${widget.orderModel.orderId}",
+                              pagos: [], // Initialize as needed or append appropriate values
+                              totalOwned: "",
+                              margen: "test",
+                              status: "Pago",
+                              clientName: widget.orderModel.clientName,
+                              celNumber: "",
+                              direccion: "",
+                              date: DateTime.now().toString(),
+                              comment: "",
+                              totalCost: pago.amount,
+                            ),
+                            widget.orderModel.productList!,
+                          );
+                        }
+                      } else if (widget.isEditPage) {
+                        final existingOrders =
+                            await dataBaseProvider.getAllOrdersWithProducts();
+
+                        final OrderModel matchingOrder =
+                            existingOrders.firstWhere(
+                                (order) => order.id == widget.orderModel.id);
+
+                        // Get the order with the same id as current orderModel from the database
+
+                        // If the order does not exist or pagos list is empty, proceed to add pagos
+
+                        for (var pago in widget.orderModel.pagos) {
+                          if (!matchingOrder.pagos
+                              .any((existingPago) => existingPago == pago)) {
+                            // Only create the pago if it doesn't exist in the current order's pagos
+                            await dataBaseProvider.createOrderWithProducts(
+                              OrderModel(
+                                orderId:
+                                    "Pago ${widget.orderModel.pagos.length} ${widget.orderModel.orderId}",
+                                pagos: [], // Initialize as needed or append appropriate values
+                                totalOwned: "",
+                                margen: "test",
+                                status: "Pago",
+                                clientName: widget.orderModel.clientName,
+                                celNumber: "",
+                                direccion: "",
+                                date: DateTime.now().toString(),
+                                comment: "",
+                                totalCost: pago.amount,
+                              ),
+                              widget.orderModel.productList!,
+                            );
+                          }
+                        }
+                      }
+
+                      {
+                        print(
+                            'Order with ID ${widget.orderModel.orderId} already exists with the same pagos.');
+                      }
+                    }
+
                     if (widget.isEditPage) {
-                      print("${widget.productModelList} ggtt5");
+                      List<OrderModel> existingOrders =
+                          await dataBaseProvider.getAllOrdersWithProducts();
+
+                      existingOrders = existingOrders
+                          .where(
+                            (order) =>
+                                order.orderId.isNotEmpty &&
+                                widget.orderModel.orderId.isNotEmpty &&
+                                order.orderId
+                                        .substring(order.orderId.length - 1) ==
+                                    widget.orderModel.orderId.substring(
+                                        widget.orderModel.orderId.length - 1),
+                            // orElse: () => throw Exception('Order not found'),
+                          )
+                          .toList();
+
+                      final ordercostOfOrder = existingOrders.firstWhere(
+                          (element) => element.status == "Costo de orden");
+                      // final orderPagoAmount = existingOrders
+                      //     .firstWhere((element) => element.status == "Pago");
+
+                      ordercostOfOrder.totalCost = widget.orderModel.totalCost +
+                          dataBaseProvider.selectedCommodities.value.fold(
+                              0,
+                              (previousValue, element) =>
+                                  element.quantity!.value * element.cost);
                       await dataBaseProvider.updateOrderWithProducts(
-                          widget.orderId,
+                          ordercostOfOrder.id.toString(),
+                          ordercostOfOrder,
+                          ordercostOfOrder.productList!);
+
+//                       orderPagoAmount.pagos = widget.orderModel.pagos;
+//                       await dataBaseProvider.updateOrderWithProducts(
+//                           orderPagoAmount.id.toString(),
+//                           orderPagoAmount,
+//                           orderPagoAmount.productList!);
+// // element.status == "Pago" ||
+
+                      //  final existingOrders =
+                      //       await dataBaseProvider.getAllOrdersWithProducts();
+
+                      //    OrderModel matchingOrder =
+                      //       existingOrders.firstWhere(
+                      //           (order) => order.orderId == widget.orderModel.orderId);
+
+                      //           matchingOrder.totalCost = widget.orderModel.totalCost;
+
+                      await dataBaseProvider.updateOrderWithProducts(
+                          widget.orderModel.id.toString(),
                           widget.orderModel,
                           widget.productModelList);
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,34 +327,48 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                       dataBaseProvider.dateRangeMap.clear();
                       dataBaseProvider.selectedCommodities.value.clear();
                       Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => HomePage()));
+                          MaterialPageRoute(builder: (_) => const HomePage()));
                       return;
                     }
-
-                    if (widget.orderModel.productList!
-                        .any((element) => element.datesUsed != null)) {
-                      await dataBaseProvider.createOrderWithProducts(
-                          widget.orderModel, widget.productModelList);
-                      dataBaseProvider.selectedProductsNotifier.value = [];
-                      dataBaseProvider.dateRangeMap.clear();
-                      dataBaseProvider.selectedCommodities.value.clear();
-                      Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => HomePage()));
-                      return;
-                    }
-
+                    final cobroOrder = OrderModel(
+                      orderId: widget.orderModel.orderId,
+                      pagos: [],
+                      totalOwned: "",
+                      margen: "",
+                      status: "Costo de orden",
+                      clientName: widget.orderModel.clientName,
+                      celNumber: "",
+                      direccion: "",
+                      date: DateTime.now().toString(),
+                      comment: "",
+                      totalCost: widget.productModelList.fold(
+                              0,
+                              (previousValue, element) =>
+                                  element.quantity!.value * element.cost) +
+                          dataBaseProvider.selectedCommodities.value.fold(
+                              0,
+                              (previousValue, element) =>
+                                  element.quantity!.value *
+                                  element.cost.toDouble()),
+                    );
                     await dataBaseProvider.createOrderWithProducts(
                         widget.orderModel, widget.productModelList);
+                    await dataBaseProvider.createOrderWithProducts(
+                        cobroOrder, widget.productModelList);
 
-                    await dataBaseProvider
-                        .reduceProductStock(widget.productModelList);
+                    if (widget.selectedOption == "Venta") {
+                      await dataBaseProvider
+                          .reduceProductStock(widget.productModelList);
+                    }
 
                     dataBaseProvider.selectedProductsNotifier.value = [];
-                    Navigator.push(
-                        context, MaterialPageRoute(builder: (_) => HomePage()));
+                    dataBaseProvider.dateRangeMap.clear();
+                    dataBaseProvider.selectedCommodities.value.clear();
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const HomePage()));
 
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Orden creada con exito')),
+                      const SnackBar(content: Text('Orden creada con éxito')),
                     );
                   },
                   child: const Text(
@@ -254,28 +385,16 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
   }
 
   String _buildRentalProductSubtitle(ProductModel product) {
-    // Retrieve the last DateRange from product.datesUsed
     DateRange lastDateRange = product.datesUsed!.last;
-
-    // Calculate total days in the last DateRange
     int totalDays =
         lastDateRange.end!.difference(lastDateRange.start!).inDays + 1;
-
-    // Calculate the total rental cost based on total days and unit price
-
-    // Build the subtitle string
     return 'Días: $totalDays x \$${product.unitPrice.toStringAsFixed(2)} (por día)';
   }
 
   double _calculateTotalRentalPrice(ProductModel product) {
-    // Retrieve the last DateRange from product.datesUsed
     DateRange lastDateRange = product.datesUsed!.last;
-
-    // Calculate total days in the last DateRange
     int totalDays =
         lastDateRange.end!.difference(lastDateRange.start!).inDays + 1;
-
-    // Calculate the total rental price based on total days and unit price
     return totalDays * product.unitPrice * product.quantity!.value;
   }
 
@@ -288,7 +407,6 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
       return widget.orderModel.date;
     }
 
-    // Ensure only the last two DateRanges are considered
     final lastTwoDates = datesUsed.length >= 2
         ? datesUsed.sublist(datesUsed.length - 2)
         : datesUsed;
@@ -343,7 +461,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
               pw.SizedBox(height: 8),
               pw.Text('Gracias por tu pedido, ${order.clientName}'),
               pw.SizedBox(height: 8),
-              pw.Text('Este es el recibo de tu pedido.'),
+              pw.Text('.'),
               pw.Divider(),
 
               // Order Details
@@ -398,18 +516,71 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     children: [
                       pw.Text(
                           '${product.quantity!.value} ${product.unit} x ${product.name}'),
-                      pw.Text("\$${product.unitPrice.toStringAsFixed(2)}"),
+                      pw.Text(
+                          "\$${product.unitPrice * product.quantity!.value}"),
                     ],
                   );
                 },
               ),
+
+              if (dataBaseProvider.selectedCommodities.value.isNotEmpty)
+                pw.Text('Costos adicionales:',
+
+                    // pw.Divider(),
+                    style: const pw.TextStyle(fontSize: 18)),
+              pw.ListView.builder(
+                itemCount: dataBaseProvider.selectedCommodities.value.length,
+                itemBuilder: (context, index) {
+                  final product =
+                      dataBaseProvider.selectedCommodities.value[index];
+                  return pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                          '${product.quantity!.value} ${product.unit} x ${product.name}'),
+                      pw.Text(
+                          "\$${product.unitPrice * product.quantity!.value}"),
+                    ],
+                  );
+                },
+              ),
+
               pw.Divider(),
 
               pw.SizedBox(height: 8),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Total a Pagar'),
+                  pw.Text('Precio total'),
+                  pw.Text('\$${widget.totalPrice} DOP'),
+                ],
+              ),
+              pw.Divider(),
+
+              // Payment List
+              if (order.pagos.isNotEmpty)
+                pw.Text('Pagos:', style: const pw.TextStyle(fontSize: 18)),
+              if (order.pagos.isNotEmpty)
+                pw.ListView.builder(
+                  itemCount: order.pagos.length,
+                  itemBuilder: (context, index) {
+                    final pago = order.pagos[index];
+                    return pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Pago de \$${pago.amount.toStringAsFixed(2)}'),
+                        pw.Text('Fecha: ${pago.date}'),
+                      ],
+                    );
+                  },
+                ),
+              pw.Divider(),
+
+              pw.SizedBox(height: 8),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Total adeudado'),
                   pw.Text('\$${order.totalOwned} DOP'),
                 ],
               ),
@@ -430,6 +601,13 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                 children: [
                   pw.Text('Comentario'),
                   pw.Text(order.comment),
+                ],
+              ),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Vendido por'),
+                  pw.Text("Freedy Elias"),
                 ],
               ),
             ],

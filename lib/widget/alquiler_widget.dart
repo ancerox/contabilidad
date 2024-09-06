@@ -182,6 +182,10 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                             .where((product) =>
                                 product.productCategory == "En alquiler")
                             .toList();
+                        listOfProductsSave = listOfProductsSave
+                            .where((product) =>
+                                product.productCategory == "En alquiler")
+                            .toList();
 
                         listOfProductsSave.removeWhere((productoAFiltrar) {
                           return dataBaseProvider.selectedProductsNotifier.value
@@ -264,6 +268,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                         productDateRanges:
                                             widget.productDateRanges,
                                         onQuantityChanged: (quantity) {
+                                          print("GEGEGEEG");
                                           // Get the current list of selected products
                                           List<ProductModel> currentList =
                                               dataBaseProvider
@@ -278,11 +283,12 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                           if (quantity == 0) {
                                             if (productExists) {
                                               _handleQuantityChanged(
-                                                  product.name, 0);
+                                                  product.name, quantity);
                                               List<ProductModel> updatedList =
                                                   List<ProductModel>.from(
                                                       currentList);
-
+                                              // updatedList.removeWhere(
+                                              //     (p) => p.id == product.id);
                                               dataBaseProvider
                                                   .selectedProductsNotifier
                                                   .value = updatedList;
@@ -434,6 +440,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                       itemCount: listOfProductsSave.length,
                                       itemBuilder: (context, index) {
                                         const uuid = Uuid();
+
                                         ProductModel product =
                                             listOfProductsSave[index];
 
@@ -483,6 +490,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                               productDateRanges:
                                                   widget.productDateRanges,
                                               onQuantityChanged: (quantity) {
+                                                print("TEST43434");
                                                 // Get the current list of selected products
                                                 List<ProductModel> currentList =
                                                     dataBaseProvider
@@ -688,169 +696,156 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                             final endDay =
                                                                 widget.endDays[
                                                                     product.id];
-                                                            return Container(
-                                                              margin:
-                                                                  const EdgeInsets
-                                                                      .symmetric(
-                                                                      vertical:
-                                                                          8.0),
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .all(
-                                                                      16.0),
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: Colors
-                                                                    .white,
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            16),
-                                                                boxShadow: [
-                                                                  BoxShadow(
-                                                                    color: Colors
-                                                                        .grey
-                                                                        .withOpacity(
-                                                                            0.2),
-                                                                    spreadRadius:
-                                                                        2,
-                                                                    blurRadius:
-                                                                        8,
-                                                                    offset:
-                                                                        const Offset(
-                                                                            0,
-                                                                            3),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                              child: Column(
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .start,
-                                                                children: [
-                                                                  Text(
-                                                                    product
-                                                                        .name,
-                                                                    style:
-                                                                        const TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                      fontSize:
-                                                                          20,
+                                                            if (product
+                                                                    .quantity!
+                                                                    .value >=
+                                                                1) {
+                                                              return Container(
+                                                                margin: const EdgeInsets
+                                                                    .symmetric(
+                                                                    vertical:
+                                                                        8.0),
+                                                                padding:
+                                                                    const EdgeInsets
+                                                                        .all(
+                                                                        16.0),
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              16),
+                                                                  boxShadow: [
+                                                                    BoxShadow(
                                                                       color: Colors
-                                                                          .black87,
+                                                                          .grey
+                                                                          .withOpacity(
+                                                                              0.2),
+                                                                      spreadRadius:
+                                                                          2,
+                                                                      blurRadius:
+                                                                          8,
+                                                                      offset:
+                                                                          const Offset(
+                                                                              0,
+                                                                              3),
                                                                     ),
-                                                                  ),
-                                                                  const SizedBox(
-                                                                      height:
-                                                                          8),
-                                                                  Row(
-                                                                    mainAxisAlignment:
-                                                                        MainAxisAlignment
-                                                                            .spaceBetween,
-                                                                    children: [
-                                                                      Column(
-                                                                        crossAxisAlignment:
-                                                                            CrossAxisAlignment.start,
-                                                                        children: [
-                                                                          const Text(
-                                                                            "Precio por día:",
-                                                                            style:
-                                                                                TextStyle(
-                                                                              fontSize: 14,
-                                                                              color: Colors.black54,
-                                                                            ),
-                                                                          ),
-                                                                          Text(
-                                                                            "\$${product.unitPrice.toStringAsFixed(2)}",
-                                                                            style:
-                                                                                const TextStyle(
-                                                                              fontSize: 16,
-                                                                              fontWeight: FontWeight.bold,
-                                                                              color: Colors.black87,
-                                                                            ),
-                                                                          ),
-                                                                          const SizedBox(
-                                                                              height: 16), // Space between rows
-                                                                          const Text(
-                                                                            "Cantidad:",
-                                                                            style:
-                                                                                TextStyle(
-                                                                              fontSize: 14,
-                                                                              color: Colors.black54,
-                                                                            ),
-                                                                          ),
-                                                                          ValueListenableBuilder<
-                                                                              int>(
-                                                                            valueListenable:
-                                                                                productQuantities[product.name]!,
-                                                                            builder: (context,
-                                                                                quantity,
-                                                                                child) {
-                                                                              return Text(
-                                                                                quantity.toString(),
-                                                                                style: const TextStyle(
-                                                                                  fontSize: 16,
-                                                                                  fontWeight: FontWeight.bold,
-                                                                                  color: Colors.black87,
-                                                                                ),
-                                                                              );
-                                                                            },
-                                                                          ),
-                                                                        ],
+                                                                  ],
+                                                                ),
+                                                                child: Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  children: [
+                                                                    Text(
+                                                                      product
+                                                                          .name,
+                                                                      style:
+                                                                          const TextStyle(
+                                                                        fontWeight:
+                                                                            FontWeight.bold,
+                                                                        fontSize:
+                                                                            20,
+                                                                        color: Colors
+                                                                            .black87,
                                                                       ),
-                                                                      Column(
-                                                                        crossAxisAlignment:
-                                                                            CrossAxisAlignment.start,
-                                                                        children: [
-                                                                          const Text(
-                                                                            "Días seleccionados:",
-                                                                            style:
-                                                                                TextStyle(
-                                                                              fontSize: 14,
-                                                                              color: Colors.black54,
+                                                                    ),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            8),
+                                                                    Row(
+                                                                      mainAxisAlignment:
+                                                                          MainAxisAlignment
+                                                                              .spaceBetween,
+                                                                      children: [
+                                                                        Column(
+                                                                          crossAxisAlignment:
+                                                                              CrossAxisAlignment.start,
+                                                                          children: [
+                                                                            const Text(
+                                                                              "Precio por día:",
+                                                                              style: TextStyle(
+                                                                                fontSize: 14,
+                                                                                color: Colors.black54,
+                                                                              ),
                                                                             ),
-                                                                          ),
-                                                                          Text(
-                                                                            startDay != null && endDay != null
-                                                                                ? "${endDay.difference(startDay).inDays + 1} días"
-                                                                                : " días",
-                                                                            style:
-                                                                                const TextStyle(
-                                                                              fontSize: 16,
-                                                                              fontWeight: FontWeight.bold,
-                                                                              color: Colors.black87,
+                                                                            Text(
+                                                                              "\$${product.unitPrice.toStringAsFixed(2)}",
+                                                                              style: const TextStyle(
+                                                                                fontSize: 16,
+                                                                                fontWeight: FontWeight.bold,
+                                                                                color: Colors.black87,
+                                                                              ),
                                                                             ),
-                                                                          ),
-                                                                          const SizedBox(
-                                                                              height: 16), // Space between rows
-                                                                          const Text(
-                                                                            "Precio total:",
-                                                                            style:
-                                                                                TextStyle(
-                                                                              fontSize: 14,
-                                                                              color: Colors.black54,
+                                                                            const SizedBox(height: 16), // Space between rows
+                                                                            const Text(
+                                                                              "Cantidad:",
+                                                                              style: TextStyle(
+                                                                                fontSize: 14,
+                                                                                color: Colors.black54,
+                                                                              ),
                                                                             ),
-                                                                          ),
-                                                                          Text(
-                                                                            startDay != null && endDay != null
-                                                                                ? "\$${(endDay.difference(startDay).inDays + 1) * (product.quantity!.value) * (product.unitPrice)}"
-                                                                                : "\$0",
-                                                                            style:
-                                                                                const TextStyle(
-                                                                              fontSize: 16,
-                                                                              fontWeight: FontWeight.bold,
-                                                                              color: Colors.green,
+                                                                            ValueListenableBuilder<int>(
+                                                                              valueListenable: productQuantities[product.name]!,
+                                                                              builder: (context, quantity, child) {
+                                                                                return Text(
+                                                                                  quantity.toString(),
+                                                                                  style: const TextStyle(
+                                                                                    fontSize: 16,
+                                                                                    fontWeight: FontWeight.bold,
+                                                                                    color: Colors.black87,
+                                                                                  ),
+                                                                                );
+                                                                              },
                                                                             ),
-                                                                          ),
-                                                                        ],
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            );
+                                                                          ],
+                                                                        ),
+                                                                        Column(
+                                                                          crossAxisAlignment:
+                                                                              CrossAxisAlignment.start,
+                                                                          children: [
+                                                                            const Text(
+                                                                              "Días seleccionados:",
+                                                                              style: TextStyle(
+                                                                                fontSize: 14,
+                                                                                color: Colors.black54,
+                                                                              ),
+                                                                            ),
+                                                                            Text(
+                                                                              startDay != null && endDay != null ? "${endDay.difference(startDay).inDays + 1} días" : " días",
+                                                                              style: const TextStyle(
+                                                                                fontSize: 16,
+                                                                                fontWeight: FontWeight.bold,
+                                                                                color: Colors.black87,
+                                                                              ),
+                                                                            ),
+                                                                            const SizedBox(height: 16), // Space between rows
+                                                                            const Text(
+                                                                              "Precio total:",
+                                                                              style: TextStyle(
+                                                                                fontSize: 14,
+                                                                                color: Colors.black54,
+                                                                              ),
+                                                                            ),
+                                                                            Text(
+                                                                              startDay != null && endDay != null ? "\$${(endDay.difference(startDay).inDays + 1) * (product.quantity!.value) * (product.unitPrice)}" : "\$0",
+                                                                              style: const TextStyle(
+                                                                                fontSize: 16,
+                                                                                fontWeight: FontWeight.bold,
+                                                                                color: Colors.green,
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              );
+                                                            }
+                                                            return Container();
                                                           },
                                                         );
                                                       },

@@ -2,6 +2,7 @@ plugins {
     id "com.android.application"
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
+
 }
 
 def localProperties = new Properties()
@@ -45,7 +46,7 @@ android {
         applicationId "com.example.contabilidad"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
-        minSdkVersion 21
+        minSdkVersion 23
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
@@ -64,4 +65,20 @@ flutter {
     source '../..'
 }
 
-dependencies {}
+dependencies {
+   implementation 'com.google.android.gms:play-services-base:17.6.0'
+   implementation 'com.google.android.gms:play-services-auth:20.5.0' 
+
+    // Import the Firebase BoM
+  implementation platform('com.google.firebase:firebase-bom:33.1.2')
+
+
+  // TODO: Add the dependencies for Firebase products you want to use
+  // When using the BoM, don't specify versions in Firebase dependencies
+  implementation 'com.google.firebase:firebase-analytics'
+
+
+}
+
+apply plugin: 'com.google.gms.google-services'
+

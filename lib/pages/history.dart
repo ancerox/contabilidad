@@ -53,22 +53,57 @@ class OrderProvider extends ChangeNotifier {
 
   List<OrderModel> get filteredOrders {
     List<OrderModel> filteredOrderList = _orders.where((OrderModel order) {
-      if (_selectedStatus == 'Transacciones') {
-        // Mostrar solo órdenes con status "pago" o "compra"
-        return order.status == 'Pago' || order.status == 'Compra';
+      print(
+          "Order ID: ${order.id}, Status: ${order.status}, Product List: ${order.productList?.length ?? 0}");
+
+      // Ensure orders with status 'Pago' are only shown in 'Transacciones'
+      if (order.status == 'Pago' || order.status == "Costo de orden") {
+        if (_selectedStatus == 'Transacciones') {
+          print("Showing 'Pago' order in Transacciones.");
+          return true;
+        } else {
+          // Explicitly exclude 'Pago' orders from 'Historial' or other sections
+          return false;
+        }
       }
+
+      // Handle 'Compra' status
+      if (order.status == 'Compra') {
+        if (order.productList?.isNotEmpty == true) {
+          if (_selectedStatus == 'historial') {
+            print(
+                "Showing 'Compra' order in Historial because it has products.");
+            return true;
+          }
+        } else if (_selectedStatus == 'Transacciones') {
+          print(
+              "Showing 'Compra' order in Transacciones because it has no products.");
+          return true;
+        }
+      }
+
+      // Handle other statuses normally
+      if (_selectedStatus == 'Transacciones') {
+        return order.status == _selectedStatus &&
+            order.productList?.isEmpty == true;
+      } else if (_selectedStatus == 'historial') {
+        return order.status != 'Pago' &&
+            (order.status != 'Compra' || order.productList?.isNotEmpty == true);
+      }
+
+      // Default behavior
       return order.status == _selectedStatus || _selectedStatus == 'historial';
     }).toList();
 
-    // Resto del código para filtrar según "Fecha", "Estatus", "Nombre", etc.
+    // Additional filtering by date, status, name, etc.
     if (_filterBy == 'Fecha' && _selectedDate != null) {
       filteredOrderList = filteredOrderList.where((OrderModel order) {
         try {
-          DateTime parsedDate = DateFormat('MM/dd/yyyy').parse(order.date);
+          DateTime parsedDate = _parseDate(order.date);
           return DateFormat('MM/dd/yyyy').format(parsedDate) ==
               DateFormat('MM/dd/yyyy').format(_selectedDate!);
         } catch (e) {
-          print('Error al analizar la fecha: $e');
+          print('Error parsing date: $e');
           return false;
         }
       }).toList();
@@ -84,10 +119,9 @@ class OrderProvider extends ChangeNotifier {
                 .toLowerCase()
                 .contains(_filterText.toLowerCase());
           case 'Número de orden':
-            return order.orderNumber
-                    ?.toLowerCase()
-                    .contains(_filterText.toLowerCase()) ??
-                false;
+            return order.orderId
+                .toLowerCase()
+                .contains(_filterText.toLowerCase());
           case 'Producto':
             return order.productList?.any((product) => product.name
                     .toLowerCase()
@@ -99,7 +133,24 @@ class OrderProvider extends ChangeNotifier {
       }).toList();
     }
 
+    print("Filtered orders count: ${filteredOrderList.length}");
     return filteredOrderList;
+  }
+
+  DateTime _parseDate(String date) {
+    try {
+      // Intentar con el formato "yyyy-MM-dd HH:mm:ss.SSSSSS"
+      return DateFormat("yyyy-MM-dd HH:mm:ss.SSSSSS").parse(date);
+    } catch (e) {
+      try {
+        // Intentar con el formato "MM/dd/yyyy"
+        return DateFormat("MM/dd/yyyy").parse(date);
+      } catch (e) {
+        print('Error al analizar la fecha: $e');
+        return DateTime
+            .now(); // Devolver la fecha actual si ambas conversiones fallan
+      }
+    }
   }
 }
 
@@ -161,15 +212,10 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
         backgroundColor: const Color(0xffA338FF),
         actions: [
           IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: () async {
-              List<OrderModel> orders = context.read<OrderProvider>().orders;
-              await dataBase.exportToCsv(context, orders);
-            },
-            tooltip: 'Exportar como CSV',
-          ),
-          IconButton(
-            icon: const Icon(Icons.table_chart),
+            icon: const Icon(
+              Icons.table_chart,
+              color: Colors.white,
+            ),
             onPressed: () async {
               List<OrderModel> orders = context.read<OrderProvider>().orders;
               await dataBase.exportToExcel(context, orders);
@@ -243,8 +289,7 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
                       icon: const Icon(Icons.arrow_downward),
                       onChanged: (String? newValue) {
                         Provider.of<OrderProvider>(context, listen: false)
-                            .setSelectedStatus(
-                                newValue!); // Usar setSelectedStatus en lugar de setFilterText
+                            .setSelectedStatus(newValue!);
                       },
                       items: <String>[
                         'pendiente',
@@ -450,9 +495,11 @@ class _InvoiceWidgetState extends State<InvoiceWidget> {
         child: Column(
           children: [
             HeaderSection(order: widget.order),
-            widget.order.status == "Pago"
+            widget.order.status == "Compra" &&
+                    widget.order.productList?.isEmpty == true
                 ? Container()
-                : widget.order.status == "Compra"
+                : widget.order.status == "Pago" ||
+                        widget.order.status == "Costo de orden"
                     ? Container()
                     : ItemListSection(
                         products: widget.products,
@@ -536,6 +583,10 @@ class HeaderSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (order.status == "Pago bigticket") {
+      order.status = "Pago";
+    }
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: const BoxDecoration(
@@ -547,21 +598,23 @@ class HeaderSection extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Flexible(
-            flex: 2,
+            flex: 3,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('#${order.id}',
+                Text(order.orderId.toString(),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, color: Colors.white)),
                 Container(
                   height: 25,
-                  width: 80,
+                  width: 200,
                   decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      color: order.status == "Pago"
+                      color: order.status == "Pago" ||
+                              order.status == "Pago bigticket"
                           ? Colors.green[400]
-                          : order.status == 'Compra'
+                          : order.status == 'Compra' ||
+                                  order.status == "Costo de orden"
                               ? Colors.red[400]
                               : Colors.amber),
                   child: Center(
@@ -582,7 +635,7 @@ class HeaderSection extends StatelessWidget {
           Flexible(
             flex: 2,
             child: Text(
-              DateFormat('dd MMMM yyyy').format(parseDate(order.date)),
+              DateFormat('dd MMMM yyyy').format(_parseDate(order.date)),
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -591,18 +644,18 @@ class HeaderSection extends StatelessWidget {
     );
   }
 
-  DateTime parseDate(String date) {
+  DateTime _parseDate(String date) {
     try {
-      // Intenta analizar la fecha en formato "yyyy-MM-dd"
-      return DateTime.parse(date);
+      // Intentar con el formato "yyyy-MM-dd HH:mm:ss.SSSSSS"
+      return DateFormat("yyyy-MM-dd HH:mm:ss.SSSSSS").parse(date);
     } catch (e) {
-      // Si falla, intenta analizarla como "MM/dd/yyyy"
       try {
-        return DateFormat('MM/dd/yyyy').parse(date);
+        // Intentar con el formato "MM/dd/yyyy"
+        return DateFormat("MM/dd/yyyy").parse(date);
       } catch (e) {
         print('Error al analizar la fecha: $e');
         return DateTime
-            .now(); // Devuelve una fecha por defecto si ambas conversiones fallan
+            .now(); // Devolver una fecha por defecto si ambas conversiones fallan
       }
     }
   }
@@ -625,6 +678,7 @@ class ItemListSection extends StatelessWidget {
           TotalRow(label: 'Total Adeudado', amount: order.totalOwned),
           for (var product in products)
             ItemRow(
+              products: products ?? [],
               image: product.file!,
               title: product.name,
               quantity: product.quantity!.value,
@@ -637,7 +691,8 @@ class ItemListSection extends StatelessWidget {
   }
 }
 
-class ItemRow extends StatelessWidget {
+class ItemRow extends StatefulWidget {
+  final List<ProductModel> products;
   final String image;
   final String title;
   final int quantity;
@@ -646,40 +701,98 @@ class ItemRow extends StatelessWidget {
 
   const ItemRow({
     super.key,
+    required this.products,
     required this.title,
     required this.image,
     required this.quantity,
     required this.cost,
     required this.unit,
   });
+  @override
+  State<ItemRow> createState() => _ItemRowState();
+}
 
+var isSubProduct = false;
+
+class _ItemRowState extends State<ItemRow> {
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10),
-      child: Row(
+      child: Column(
         children: [
-          const SizedBox(width: 8.0),
-          Text('$quantity  '),
-          const Text('x '),
-          CircleAvatar(
-            radius: 12, // Ajusta el radio para que el círculo sea más grande
-            backgroundColor: Colors.orangeAccent[300],
-            child: Container(
-              width: 9, // Ajusta el ancho del contenedor
-              height: 9, // Ajusta la altura del contenedor
-              decoration: BoxDecoration(
-                shape: BoxShape
-                    .circle, // Asegúrate de que el contenedor tenga forma circular
-                image: DecorationImage(
-                  fit: BoxFit
-                      .cover, // Asegúrate de que la imagen cubra todo el contenedor
-                  image: FileImage(File(image)),
+          Row(
+            children: [
+              const SizedBox(width: 8.0),
+              Text('${widget.quantity}  '),
+              const Text('x '),
+              CircleAvatar(
+                radius:
+                    12, // Ajusta el radio para que el círculo sea más grande
+                backgroundColor: Colors.orangeAccent[300],
+                child: Container(
+                  width: 9, // Ajusta el ancho del contenedor
+                  height: 9, // Ajusta la altura del contenedor
+                  decoration: BoxDecoration(
+                    shape: BoxShape
+                        .circle, // Asegúrate de que el contenedor tenga forma circular
+                    image: DecorationImage(
+                      fit: BoxFit
+                          .cover, // Asegúrate de que la imagen cubra todo el contenedor
+                      image: FileImage(File(widget.image)),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              GestureDetector(
+                  onTap: () {
+                    isSubProduct = !isSubProduct;
+                    setState(() {});
+                  },
+                  child: SizedBox(
+                    width:
+                        200, // constraints the width to the maximum available
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "${widget.unit} ${widget.title}",
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        for (var product in widget.products)
+                          if (product.subProduct != null &&
+                              product.subProduct!.isNotEmpty)
+                            const Icon(
+                              Icons.arrow_drop_down,
+                              color: Colors.grey,
+                            ),
+                      ],
+                    ),
+                  )),
+            ],
           ),
-          Flexible(child: Text(" $unit $title")),
+          if (isSubProduct == true)
+            for (var product in widget.products)
+              if (product.subProduct != null && product.subProduct!.isNotEmpty)
+                ...product.subProduct!.map((subproduct) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 70),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${subproduct.quantity!.value} x ${subproduct.name}',
+                          style: const TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                        Text(
+                          '  \$${subproduct.cost}',
+                          style: const TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
         ],
       ),
     );
@@ -700,7 +813,10 @@ class TotalSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // If the status is "cobro" or "venta," skip the margin and admin cost calculations
-    if (order.status == "Pago" || order.status == "Compra") {
+    if (order.status == "Pago" ||
+        order.status == "Compra" ||
+        order.status == "Pago bigticket" ||
+        order.status == "Costo de orden") {
       return Container(
         decoration: BoxDecoration(
           border: Border.all(color: const Color(0xffA338FF), width: 0.4),
@@ -726,20 +842,19 @@ class TotalSection extends StatelessWidget {
         (int sum, ProductModel product) =>
             sum + product.unitPrice.toInt() * product.quantity!.value);
 
+    final newMargen = double.parse(order.margen) + adminCost;
+
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xffA338FF), width: 0.4),
       ),
       child: Column(
         children: [
-          TotalRow(
-              label: 'Costo total',
-              amount:
-                  '\$${(order.totalCost - double.parse(order.margen)) + adminCost}'),
+          TotalRow(label: 'Costo total', amount: '\$${(order.totalCostSpent)}'),
           TotalRow(
               label: 'Precio total',
               amount: '\$${order.totalCost + adminPrice}'),
-          TotalRow(label: 'Margen', amount: '\$${(order.margen)}'),
+          TotalRow(label: 'Margen', amount: '\$$newMargen'),
           TotalRow(label: 'Costos administrativos', amount: '\$$adminCost'),
         ],
       ),
@@ -796,12 +911,28 @@ class PaymentSection extends StatelessWidget {
       // Establecer la localización a español
       Intl.defaultLocale = 'es_ES';
       // Analizar la fecha con el formato especificado
-      DateTime parsedDate = DateFormat('MM/dd/yyyy').parse(date);
+      DateTime parsedDate = _parseDate(date);
       // Formatear la fecha como "dd MMMM yyyy" en español
       return DateFormat('dd MMMM yyyy', 'es_ES').format(parsedDate);
     } catch (e) {
       // Manejar el error devolviendo un mensaje por defecto o de error
       return 'Fecha inválida';
+    }
+  }
+
+  DateTime _parseDate(String date) {
+    try {
+      // Intentar con el formato "yyyy-MM-dd HH:mm:ss.SSSSSS"
+      return DateFormat("yyyy-MM-dd HH:mm:ss.SSSSSS").parse(date);
+    } catch (e) {
+      try {
+        // Intentar con el formato "MM/dd/yyyy"
+        return DateFormat("MM/dd/yyyy").parse(date);
+      } catch (e) {
+        print('Error al analizar la fecha: $e');
+        return DateTime
+            .now(); // Devolver una fecha por defecto si ambas conversiones fallan
+      }
     }
   }
 }

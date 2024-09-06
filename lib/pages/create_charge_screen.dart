@@ -17,11 +17,17 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
   late DataBase dataBaseProvider;
   ValueNotifier<int?> selectedOrderIndex = ValueNotifier<int?>(null);
   late OrderModel cobroOrder;
+  late int countDB;
 
   @override
   void initState() {
     super.initState();
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
+    getCountAmountOrders();
+  }
+
+  getCountAmountOrders() async {
+    countDB = await dataBaseProvider.getTotalOrdersCount("COBRO");
   }
 
   @override
@@ -58,7 +64,7 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                       },
                       controller: _montoController,
                       decoration: const InputDecoration(
-                        labelText: 'Monto',
+                        labelText: 'Monto (opcional)',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.attach_money),
                       ),
@@ -78,7 +84,9 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                   if (snapshot.connectionState == ConnectionState.done) {
                     if (snapshot.hasData) {
                       List<OrderModel> filteredOrderList = snapshot.data!
-                          .where((order) => order.status == "pendiente")
+                          .where((order) =>
+                              order.status == "pendiente" &&
+                              double.parse(order.totalOwned) > 0.0)
                           .toList();
 
                       return ValueListenableBuilder<int?>(
@@ -88,48 +96,24 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                             itemCount: filteredOrderList.length,
                             itemBuilder: (context, index) {
                               final order = filteredOrderList[index];
-
                               double totalOwnedAmount =
                                   double.tryParse(order.totalOwned) ?? 0.0;
-                              bool isSelected = totalOwnedAmount <= 0;
+
+                              bool isSelected =
+                                  selectedOrderIndex.value == index;
 
                               return Card(
-                                color: totalOwnedAmount <= 0
-                                    ? Colors.greenAccent[100]
-                                    : null,
+                                color:
+                                    isSelected ? Colors.greenAccent[100] : null,
                                 child: ListTile(
-                                  onTap: totalOwnedAmount <= 0
-                                      ? () {
-                                          final snackBar = SnackBar(
-                                            content: const Text(
-                                              'Esta persona ya no tiene deudas',
-                                              style: TextStyle(
-                                                fontSize: 16.0,
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            backgroundColor: Colors.red,
-                                            duration:
-                                                const Duration(seconds: 3),
-                                            behavior: SnackBarBehavior.floating,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(20.0),
-                                            ),
-                                            margin: const EdgeInsets.all(10),
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 24.0,
-                                                vertical: 12.0),
-                                          );
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(snackBar);
-                                        }
-                                      : () {
-                                          selectedOrderIndex.value =
-                                              isSelected ? null : index;
-                                          cobroOrder = order;
-                                        },
+                                  onTap: () {
+                                    if (selectedOrderIndex.value == index) {
+                                      selectedOrderIndex.value = null;
+                                    } else {
+                                      selectedOrderIndex.value = index;
+                                      cobroOrder = order;
+                                    }
+                                  },
                                   leading: const Icon(Icons.payment,
                                       color: Colors.blue),
                                   title: Column(
@@ -143,7 +127,7 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       Text(
-                                        'Numero de orden: ${order.orderNumber}',
+                                        order.orderId,
                                         style:
                                             TextStyle(color: Colors.grey[600]),
                                         overflow: TextOverflow.ellipsis,
@@ -155,9 +139,7 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        totalOwnedAmount < 0
-                                            ? "Extra ${totalOwnedAmount.abs()}"
-                                            : 'Deuda total: ${order.totalOwned}',
+                                        'Deuda total: ${order.totalOwned}',
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                             color: totalOwnedAmount < 0
@@ -204,64 +186,109 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                   width: double.infinity,
                   height: 60,
                   child: ElevatedButton(
-                    onPressed: value != null && _montoController.text.isNotEmpty
+                    onPressed: _conceptoController.text.isNotEmpty
                         ? () async {
-                            double paymentAmount =
-                                double.parse(_montoController.text);
+                            if (value != null &&
+                                _montoController.text.isNotEmpty) {
+                              double paymentAmount =
+                                  double.parse(_montoController.text);
 
-                            // Create a new payment
-                            PagoModel newPago = PagoModel(
-                              date: DateFormat('MM/dd/yyyy')
-                                  .format(DateTime.now()),
-                              amount: paymentAmount,
-                            );
+                              // Crear un nuevo pago solo si se seleccionó una orden
+                              PagoModel newPago = PagoModel(
+                                date: DateFormat('MM/dd/yyyy')
+                                    .format(DateTime.now()),
+                                amount: paymentAmount,
+                              );
 
-                            // Add the new payment to the order's pagos list
-                            cobroOrder.pagos.add(newPago);
+                              // Agregar el pago a la orden seleccionada
+                              cobroOrder.pagos.add(newPago);
 
-                            // Subtract the payment amount from the total owed
-                            double newTotalOwed =
-                                (double.tryParse(cobroOrder.totalOwned) ??
-                                        0.0) -
-                                    paymentAmount;
+                              // Actualizar el total pendiente
+                              double newTotalOwed =
+                                  (double.tryParse(cobroOrder.totalOwned) ??
+                                          0.0) -
+                                      paymentAmount;
 
-                            // Update the totalOwned amount
-                            cobroOrder = cobroOrder.copyWith(
-                                totalOwned: newTotalOwed.toString());
+                              cobroOrder = cobroOrder.copyWith(
+                                  totalOwned: newTotalOwed.toString());
 
-                            // If the debt is fully paid, close the order
-                            if (newTotalOwed <= 0) {
-                              cobroOrder =
-                                  cobroOrder.copyWith(status: "cerrado");
+                              if (newTotalOwed <= 0) {
+                                cobroOrder =
+                                    cobroOrder.copyWith(status: "cerrado");
+                              }
+
+                              // Actualizar la orden en la base de datos
+                              await dataBaseProvider.updateOrderWithProducts(
+                                  cobroOrder.id.toString(),
+                                  cobroOrder,
+                                  cobroOrder.productList!);
                             }
 
-                            // Update the order in the database
-                            await dataBaseProvider.updateOrderWithProducts(
-                                cobroOrder.id!,
-                                cobroOrder,
-                                cobroOrder.productList!);
-
-                            // Create a ticket for this payment
-                            await dataBaseProvider.createOrderWithProducts(
-                              OrderModel(
-                                pagos: [],
-                                totalOwned: "",
-                                margen: "",
-                                status: "Pago",
-                                clientName: cobroOrder.clientName,
-                                celNumber: "",
-                                direccion: "",
-                                date: DateTime.now().toString(),
-                                comment: "",
-                                totalCost: paymentAmount,
-                              ),
-                              cobroOrder.productList!,
-                            );
+                            // Crear una nueva orden sin cobro asociado
+                            if (value != null) {
+                              print("TEST44");
+                              await dataBaseProvider.createOrderWithProducts(
+                                OrderModel(
+                                  orderId:
+                                      "COBRO ${cobroOrder.pagos.length} ${cobroOrder.orderId}",
+                                  pagos: [],
+                                  totalOwned: "",
+                                  margen: "",
+                                  status: "Pago",
+                                  clientName: _conceptoController.text,
+                                  celNumber: "",
+                                  direccion: "",
+                                  date: DateTime.now().toString(),
+                                  comment: "",
+                                  totalCost:
+                                      double.tryParse(_montoController.text) ??
+                                          0,
+                                ),
+                                cobroOrder.productList!,
+                              );
+                            }
+                            if (value == null) {
+                              print("TEST45");
+                              await dataBaseProvider.createOrderWithProducts(
+                                OrderModel(
+                                  orderId: "COBRO $countDB",
+                                  pagos: [],
+                                  totalOwned: "",
+                                  margen: "",
+                                  status: "Pago",
+                                  clientName: _conceptoController.text,
+                                  celNumber: "",
+                                  direccion: "",
+                                  date: DateTime.now().toString(),
+                                  comment: "",
+                                  totalCost:
+                                      double.tryParse(_montoController.text) ??
+                                          0,
+                                ),
+                                [
+                                  // ProductModel(
+                                  //   id: 1,
+                                  //   name: "Sample Product",
+                                  //   file: "path/to/file.png",
+                                  //   amount: 10,
+                                  //   unitPrice: 20.5,
+                                  //   productCategory: "Category",
+                                  //   cost: 15,
+                                  //   unit: "kg",
+                                  //   productType: "Sale",
+                                  //   quantity: ValueNotifier<int>(5),
+                                  //   subProduct: const [], // You can add nested ProductModel instances here if needed
+                                  //   datesNotAvailable: const [],
+                                  //   datesUsed: const [],
+                                  // )
+                                ],
+                              );
+                            }
 
                             final snackBar = SnackBar(
-                              content: Text(
-                                'Has recibido un pago de ${cobroOrder.clientName} correctamente',
-                                style: const TextStyle(
+                              content: const Text(
+                                'Orden creada correctamente',
+                                style: TextStyle(
                                   fontSize: 16.0,
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -279,89 +306,9 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                             );
                             ScaffoldMessenger.of(context)
                                 .showSnackBar(snackBar);
-                            setState(() {});
                             Navigator.pop(context);
                           }
-                        : _montoController.text.isNotEmpty &&
-                                _conceptoController.text.isNotEmpty
-                            ? () async {
-                                double paymentAmount =
-                                    double.parse(_montoController.text);
-
-                                // Create a new payment
-                                PagoModel newPago = PagoModel(
-                                  date: DateFormat('MM/dd/yyyy')
-                                      .format(DateTime.now()),
-                                  amount: paymentAmount,
-                                );
-
-                                // Add the new payment to the order's pagos list
-                                cobroOrder.pagos.add(newPago);
-
-                                // Subtract the payment amount from the total owed
-                                double newTotalOwed =
-                                    (double.tryParse(cobroOrder.totalOwned) ??
-                                            0.0) -
-                                        paymentAmount;
-
-                                // Update the totalOwned amount
-                                cobroOrder = cobroOrder.copyWith(
-                                    totalOwned: newTotalOwed.toString());
-
-                                // If the debt is fully paid, close the order
-                                if (newTotalOwed <= 0) {
-                                  cobroOrder =
-                                      cobroOrder.copyWith(status: "cerrado");
-                                }
-
-                                // Update the order in the database
-                                await dataBaseProvider.updateOrderWithProducts(
-                                    cobroOrder.id!,
-                                    cobroOrder,
-                                    cobroOrder.productList!);
-
-                                // Create a ticket for this payment
-                                await dataBaseProvider.createOrderWithProducts(
-                                  OrderModel(
-                                    pagos: [],
-                                    totalOwned: "",
-                                    margen: "",
-                                    status: "Pago",
-                                    clientName: _conceptoController.text,
-                                    celNumber: "",
-                                    direccion: "",
-                                    date: DateTime.now().toString(),
-                                    comment: "",
-                                    totalCost: paymentAmount,
-                                  ),
-                                  cobroOrder.productList!,
-                                );
-
-                                final snackBar = SnackBar(
-                                  content: Text(
-                                    'Has recibido un pago de ${_conceptoController.text} correctamente',
-                                    style: const TextStyle(
-                                      fontSize: 16.0,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  backgroundColor: Colors.deepPurple,
-                                  duration: const Duration(seconds: 3),
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20.0),
-                                  ),
-                                  margin: const EdgeInsets.all(10),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24.0, vertical: 12.0),
-                                );
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(snackBar);
-                                setState(() {});
-                                Navigator.pop(context);
-                              }
-                            : null,
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(255, 108, 40, 123),
                       textStyle: const TextStyle(fontSize: 20),

@@ -1,8 +1,14 @@
+import 'dart:io';
+
 import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
 import 'package:contabilidad/pages/home_page.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 class ReceiptPage extends StatefulWidget {
@@ -61,7 +67,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
                       title: Text(product.name,
                           style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(
-                          'Cantidad: $quantity\nPrecio por unidad: \$${product.cost.toStringAsFixed(2)}'),
+                          'Cantidad: $quantity\nPrecio total de item: \$${product.cost * product.quantity!.value}'),
                     );
                   },
                 ),
@@ -99,27 +105,165 @@ class _ReceiptPageState extends State<ReceiptPage> {
                 child: ElevatedButton(
                   onPressed: () async {
                     // Lógica para exportar a Excel
-                    await dataBaseProvider.exportToExcel(context, [
-                      OrderModel(
-                        pagos: [],
-                        orderNumber: "",
-                        clientName: conceptoController.text,
-                        celNumber: '',
-                        direccion: '',
-                        date: DateTime.now().toString(),
-                        comment: "",
-                        totalCost: totalCost,
-                        status: 'Compra',
-                        margen: '',
-                        totalOwned: '',
-                        productList: widget.selectedProducts,
-                      )
-                    ]);
+                    final order = OrderModel(
+                      orderId: "COMPRA",
+                      pagos: [],
+                      orderNumber: "",
+                      clientName: conceptoController.text,
+                      celNumber: '',
+                      direccion: '',
+                      date: DateTime.now().toString(),
+                      comment: "",
+                      totalCost:
+                          widget.selectedProducts.fold(0.0, (sum, product) {
+                        return sum + (product.cost * product.quantity!.value);
+                      }),
+                      status: 'Compra',
+                      margen: '',
+                      totalOwned: '',
+                      productList: widget.selectedProducts,
+                    );
+                    final pdf = pw.Document();
+                    final countDB =
+                        await dataBaseProvider.getTotalOrdersCount("COMPRA");
+                    DateTime parsedDate = DateTime.parse(order.date);
+
+                    pdf.addPage(
+                      pw.Page(
+                        build: (pw.Context context) {
+                          return pw.Column(
+                            children: [
+                              // Encabezado del recibo
+                              pw.Text('Recibo de Compra',
+                                  style: const pw.TextStyle(fontSize: 24)),
+                              pw.SizedBox(height: 8),
+                              pw.Text(
+                                  'Gracias por tu compra, ${order.clientName}'),
+                              pw.SizedBox(height: 8),
+                              pw.Text(
+                                  'Este es el recibo de la compra de tu producto.'),
+                              pw.Divider(),
+
+                              // Detalles del pedido
+                              pw.Row(
+                                mainAxisAlignment:
+                                    pw.MainAxisAlignment.spaceBetween,
+                                children: [
+                                  pw.Text('Número de Pedido'),
+                                  pw.Text(countDB.toString()),
+                                ],
+                              ),
+                              pw.SizedBox(height: 8),
+                              pw.Row(
+                                mainAxisAlignment:
+                                    pw.MainAxisAlignment.spaceBetween,
+                                children: [
+                                  pw.Text('Fecha'),
+                                  pw.Text(DateFormat('d MMMM y')
+                                      .format(parsedDate)),
+                                ],
+                              ),
+
+                              pw.Divider(),
+
+                              // Lista de productos
+                              pw.Text('Productos Comprados:',
+                                  style: const pw.TextStyle(fontSize: 18)),
+                              pw.ListView.builder(
+                                itemCount: order.productList!.length,
+                                itemBuilder: (context, index) {
+                                  final product = order.productList![index];
+                                  return pw.Row(
+                                    mainAxisAlignment:
+                                        pw.MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      pw.Text(
+                                          '${product.quantity!.value} x ${product.name}'),
+                                      pw.Text(
+                                          "\$${product.cost * product.quantity!.value}"),
+                                    ],
+                                  );
+                                },
+                              ),
+                              pw.Divider(),
+
+                              // Precio total
+                              pw.Row(
+                                mainAxisAlignment:
+                                    pw.MainAxisAlignment.spaceBetween,
+                                children: [
+                                  pw.Text('Precio total'),
+                                  pw.Text('\$${order.totalCost}'),
+                                ],
+                              ),
+                              pw.Divider(),
+
+                              // Pagos
+                              if (order.pagos.isNotEmpty)
+                                pw.Text('Pagos:',
+                                    style: const pw.TextStyle(fontSize: 18)),
+                              if (order.pagos.isNotEmpty)
+                                pw.ListView.builder(
+                                  itemCount: order.pagos.length,
+                                  itemBuilder: (context, index) {
+                                    final pago = order.pagos[index];
+                                    return pw.Row(
+                                      mainAxisAlignment:
+                                          pw.MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        pw.Text(
+                                            'Pago de \$${pago.amount.toStringAsFixed(2)}'),
+                                        pw.Text('Fecha: ${pago.date}'),
+                                      ],
+                                    );
+                                  },
+                                ),
+
+                              pw.Divider(),
+
+                              // Estado y Comentarios
+                              pw.Row(
+                                mainAxisAlignment:
+                                    pw.MainAxisAlignment.spaceBetween,
+                                children: [
+                                  pw.Text('Estado'),
+                                  pw.Text(order.status),
+                                ],
+                              ),
+                              pw.SizedBox(height: 8),
+                              pw.Row(
+                                mainAxisAlignment:
+                                    pw.MainAxisAlignment.spaceBetween,
+                                children: [
+                                  pw.Text('Comentario'),
+                                  pw.Text(order.clientName),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    );
+
+                    // Guardar o imprimir el PDF
+                    // await Printing.layoutPdf(
+                    //     onLayout: (PdfPageFormat format) async => pdf.save());
+
+                    // Guardar el PDF en un archivo
+                    final output = await getApplicationDocumentsDirectory();
+                    final file =
+                        File("${output.path}/compra_${order.orderId}.pdf");
+                    await file.writeAsBytes(await pdf.save());
+
+                    // Mostrar el PDF para imprimir o compartir
+                    await Printing.sharePdf(
+                        bytes: await pdf.save(),
+                        filename: 'compra_${order.orderId}.pdf');
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                   ),
-                  child: const Text('Exportar a Excel',
+                  child: const Text('Exportar a PDF',
                       style: TextStyle(color: Colors.white)),
                 ),
               ),
@@ -176,32 +320,37 @@ class _ReceiptPageState extends State<ReceiptPage> {
       List<ProductModel> consolidatedProducts) async {
     final dataBase = Provider.of<DataBase>(context, listen: false);
 
+    // This list will store products with their original quantity preserved for creating the order
+    List<ProductModel> productsForOrder = [];
+
     for (var product in consolidatedProducts) {
-      dataBase.updateProduct(product);
-      if (product.productType == 'Servicio' ||
+      // Preserve the original quantity for order creation
+      productsForOrder.add(
+          product.copyWith(quantity: ValueNotifier(product.quantity!.value)));
+
+      if (product.productType == 'Servicios' ||
           product.productType == "Gasto administrativo") {
         continue;
-      } else if (product.productType == 'Materia prima' ||
-          product.productType == "Producto terminado" &&
-              product.subProduct == null ||
-          product.subProduct!.isEmpty) {
+      } else {
         int newAmount = product.amount + product.quantity!.value;
         product.amount = newAmount;
-        await dataBase.updateProduct(product);
-      } else if (product.productType == 'Materia prima' ||
-          product.productType == "Producto terminado") {
-        int newAmount = product.amount + product.quantity!.value;
-        product.amount = newAmount;
+
+        // Reset quantity to 0 after updating the amount
+        int quantityUsed = product.quantity!.value;
+        product.quantity = ValueNotifier(0);
         await dataBase.updateProduct(product);
 
-        if (product.subProduct != null) {
+        if (product.subProduct != null && product.subProduct!.isNotEmpty) {
           for (var subProduct in product.subProduct!) {
             var subProductFromDb =
                 await dataBase.getProductById(subProduct.id!);
-            if (subProductFromDb != null) {
-              int newSubProductAmount =
-                  subProductFromDb.amount - product.quantity!.value;
+            if (subProductFromDb != null &&
+                subProductFromDb.productType == "Materia prima") {
+              int newSubProductAmount = subProductFromDb.amount - quantityUsed;
               subProductFromDb.amount = newSubProductAmount;
+
+              // Reset sub-product quantity to 0
+              subProductFromDb.quantity = ValueNotifier(0);
               await dataBase.updateProduct(subProductFromDb);
             }
           }
@@ -209,7 +358,12 @@ class _ReceiptPageState extends State<ReceiptPage> {
       }
     }
 
-    OrderModel order = OrderModel(
+    final countDB = await dataBase.getTotalOrdersCount("COMPRA");
+
+    // Crear orden de transacción
+    OrderModel orderTra = OrderModel(
+      orderId: "COMPRA $countDB",
+      productList: [],
       pagos: [],
       orderNumber: "",
       clientName: concepto,
@@ -217,17 +371,36 @@ class _ReceiptPageState extends State<ReceiptPage> {
       direccion: '',
       date: DateTime.now().toString(),
       comment: "",
-      totalCost: consolidatedProducts.fold(
+      totalCost: productsForOrder.fold(
+          0, (sum, item) => sum + (item.cost * item.quantity!.value)),
+      status: 'Compra',
+      margen: 'test',
+      totalOwned: '',
+    );
+
+    // Crear orden de compra
+    OrderModel order = OrderModel(
+      orderId: "COMPRA $countDB",
+      productList: productsForOrder,
+      pagos: [],
+      orderNumber: "",
+      clientName: concepto,
+      celNumber: '',
+      direccion: '',
+      date: DateTime.now().toString(),
+      comment: "",
+      totalCost: productsForOrder.fold(
           0, (sum, item) => sum + (item.cost * item.quantity!.value)),
       status: 'Compra',
       margen: '',
       totalOwned: '',
     );
 
-    await dataBase.createOrderWithProducts(order, consolidatedProducts);
+    await dataBase.createOrderWithProducts(orderTra, []);
+    await dataBase.createOrderWithProducts(order, productsForOrder);
 
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => HomePage()),
+      MaterialPageRoute(builder: (context) => const HomePage()),
       (Route<dynamic> route) => false,
     );
   }

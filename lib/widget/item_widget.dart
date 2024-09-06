@@ -57,7 +57,6 @@ class Item extends StatefulWidget {
 
 class _ItemState extends State<Item> {
   bool isDetailedPressed = false;
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -195,14 +194,13 @@ class _ItemState extends State<Item> {
                                         : Row(
                                             children: [
                                               Container(
-                                                decoration: const BoxDecoration(
-                                                    color: Color.fromARGB(
-                                                        255, 235, 235, 235)),
+                                                decoration:
+                                                    const BoxDecoration(),
                                                 height: screenHeight * 0.04,
                                                 width: screenWidth * 0.18,
                                                 child: TextFormField(
                                                   onChanged:
-                                                      widget.costOnChange,
+                                                      widget.unitPriceOnChange,
                                                   maxLines: 1,
                                                   textAlign: TextAlign.left,
                                                   inputFormatters: <TextInputFormatter>[
@@ -235,9 +233,8 @@ class _ItemState extends State<Item> {
                                                 ),
                                               ),
                                               Container(
-                                                decoration: const BoxDecoration(
-                                                    color: Color.fromARGB(
-                                                        255, 235, 235, 235)),
+                                                decoration:
+                                                    const BoxDecoration(),
                                                 height: screenHeight * 0.04,
                                                 width: screenWidth * 0.05,
                                                 child: const Center(
@@ -267,6 +264,7 @@ class _ItemState extends State<Item> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
+                                      overflow: TextOverflow.ellipsis,
                                       widget.name,
                                       style: subtitles.copyWith(
                                           color: Colors.black,
@@ -464,38 +462,22 @@ class _ItemState extends State<Item> {
                                     vertical: screenHeight * 0.005),
                                 child: Row(
                                   mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Expanded(
-                                      flex: 1,
-                                      child: Text(
-                                        subProduct.quantity!.value.toString(),
-                                        style: TextStyle(
-                                          overflow: TextOverflow.ellipsis,
-                                          fontSize: screenHeight * 0.018,
-                                        ),
+                                    Text(
+                                      "${subProduct.quantity!.value} x ${subProduct.unit}  ${subProduct.name}",
+                                      style: TextStyle(
+                                        overflow: TextOverflow.ellipsis,
+                                        fontSize: screenHeight * 0.018,
                                       ),
                                     ),
                                     const SizedBox(width: 10),
-                                    Expanded(
-                                      flex: 1,
-                                      child: Text(
-                                        subProduct.unit,
-                                        style: TextStyle(
-                                          overflow: TextOverflow.ellipsis,
-                                          fontSize: screenHeight * 0.018,
-                                        ),
-                                      ),
-                                    ),
                                     const SizedBox(width: 40),
-                                    Expanded(
-                                      flex: 1,
-                                      child: Text(
-                                        "${subProduct.name} ${subProduct.cost * subProduct.quantity!.value} DOP",
-                                        style: TextStyle(
-                                          overflow: TextOverflow.ellipsis,
-                                          fontSize: screenHeight * 0.018,
-                                        ),
+                                    Text(
+                                      "${subProduct.cost * subProduct.quantity!.value}\$",
+                                      style: TextStyle(
+                                        overflow: TextOverflow.ellipsis,
+                                        fontSize: screenHeight * 0.018,
                                       ),
                                     ),
                                   ],

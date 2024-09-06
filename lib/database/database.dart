@@ -4,15 +4,15 @@ import 'dart:io';
 import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/order_model.dart';
 import 'package:contabilidad/models/product_model.dart';
-import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:path/path.dart' as p;
 import 'package:path/path.dart' as path;
-import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
 
 class DataBase extends ChangeNotifier {
@@ -45,15 +45,15 @@ class DataBase extends ChangeNotifier {
 
   Future<Database> getDatabase() async {
     final directory = await getApplicationDocumentsDirectory();
-    final path = join(directory.path, 'mi_base_de_datos.db');
+    final path = p.join(directory.toString(), 'mi_base_de_datos.db');
     return openDatabase(
       path,
       onCreate: (db, version) {
         db.execute(
-          "CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, name TEXT, file TEXT, amount INTEGER, unitPrice REAL, productCategory TEXT, cost REAL, unit TEXT, productType TEXT, subProduct TEXT, quantity INTEGER, datesNotAvailable TEXT, datesUsed TEXT)",
+          "CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, name TEXT, file TEXT, amount INTEGER, unitPrice REAL, productCategory TEXT, cost REAL, unit TEXT, productType TEXT, subProduct TEXT, quantity INTEGER, datesNotAvailable TEXT, datesUsed TEXT, costModified INTEGER)",
         );
         db.execute(
-          "CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT, clientName TEXT, celNumber TEXT, direccion TEXT, date TEXT, comment TEXT, totalCost REAL, status TEXT, margen TEXT, totalOwned TEXT, orderNumber TEXT, productList TEXT, pagos TEXT, datesInUse TEXT, adminExpenses TEXT)",
+          "CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT, clientName TEXT, celNumber TEXT, direccion TEXT, date TEXT, comment TEXT, totalCost REAL, status TEXT, margen TEXT, totalOwned TEXT, orderNumber TEXT, productList TEXT, pagos TEXT, datesInUse TEXT, adminExpenses TEXT, orderId TEXT, totalCostSpent INTEGER)",
         );
         db.execute(
           "CREATE TABLE IF NOT EXISTS order_products(orderId INTEGER, productId INTEGER, quantity INTEGER, PRIMARY KEY (orderId, productId), FOREIGN KEY (orderId) REFERENCES orders(id), FOREIGN KEY (productId) REFERENCES products(id))",
@@ -126,7 +126,7 @@ class DataBase extends ChangeNotifier {
           case 'Fecha':
             return order.date.toLowerCase().contains(_filterText.toLowerCase());
           case 'Número de orden':
-            return order.id.toString().contains(_filterText);
+            return order.orderId.toString().contains(_filterText);
           case 'Producto':
             return order.productList?.any((product) => product.name
                     .toLowerCase()
@@ -148,66 +148,127 @@ class DataBase extends ChangeNotifier {
     return filteredOrderList;
   }
 
-  Future<void> exportToCsv(
+  // Future<void> exportToCsv(
+  //     BuildContext context, List<OrderModel> orders) async {
+  //   try {
+  //     // Prompt the user to select a directory
+  //     String? directoryPath = await FilePicker.platform.getDirectoryPath();
+
+  //     if (directoryPath == null) {
+  //       // User canceled the picker
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         const SnackBar(content: Text('Export canceled')),
+  //       );
+  //       return;
+  //     }
+
+  //     List<List<String>> csvData = [
+  //       // Header row
+  //       <String>['Order ID', 'Client Name', 'Status', 'Date', 'Total Cost'],
+  //       // Data rows
+  //       ...orders.map((order) => [
+  //             order.id.toString(),
+  //             order.clientName,
+  //             order.status,
+  //             order.date,
+  //             order.totalCost.toString(),
+  //           ])
+  //     ];
+
+  //     String csv = const ListToCsvConverter().convert(csvData);
+
+  //     // Save file to the selected directory
+  //     final String path = '$directoryPath/orders.csv';
+
+  //     final File file = File(path);
+  //     await file.writeAsString(csv);
+
+  //     // Show success message
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('CSV file saved to $path')),
+  //     );
+  //   } catch (e) {
+  //     // Show error message
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Failed to export CSV: $e')),
+  //     );
+  //   }
+  // }
+  Future<void> exportToExcel(
       BuildContext context, List<OrderModel> orders) async {
     try {
-      // Prompt the user to select a directory
-      String? directoryPath = await FilePicker.platform.getDirectoryPath();
+      // Solicita al usuario seleccionar un directorio
+      orders.sort((a, b) => a.date.compareTo(b.date));
 
-      if (directoryPath == null) {
-        // User canceled the picker
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export canceled')),
-        );
-        return;
+      var excel = Excel.createExcel();
+
+      // Crea una hoja llamada "Ordenes"
+      Sheet sheetObject = excel['Ordenes'];
+
+      // Fila de encabezado
+      sheetObject.appendRow([
+        'Numero de orden',
+        'Cliente',
+        'Fecha',
+        'Total adeudado',
+        'Producto',
+        'Qty',
+        'Precio',
+        'Costo',
+        'Margen',
+        'Costos administrativos',
+        'Estatus'
+      ]);
+
+      // Filas de datos
+      for (var order in orders) {
+        for (var product in order.productList!) {
+          sheetObject.appendRow([
+            order.orderId.toString(),
+            order.clientName,
+            order.date,
+            order.totalOwned,
+            product.name,
+            product.quantity!.value,
+            product.unitPrice,
+            product.cost,
+            product.unitPrice - product.cost,
+            order.adminExpenses,
+            order.status,
+          ]);
+        }
       }
 
-      List<List<String>> csvData = [
-        // Header row
-        <String>['Order ID', 'Client Name', 'Status', 'Date', 'Total Cost'],
-        // Data rows
-        ...orders.map((order) => [
-              order.id.toString(),
-              order.clientName,
-              order.status,
-              order.date,
-              order.totalCost.toString(),
-            ])
-      ];
+      // Guardar el archivo en el directorio seleccionado
+      final directory = await getTemporaryDirectory();
+      final String path = p.join(directory.path, 'ordenes.xlsx');
 
-      String csv = const ListToCsvConverter().convert(csvData);
+      // Guardar temporalmente el archivo
+      final File file = File(path)
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(excel.encode()!);
 
-      // Save file to the selected directory
-      final String path = '$directoryPath/orders.csv';
+      // Compartir el archivo usando share_plus
+      await Share.shareFiles([path],
+          text: 'Aquí tienes las órdenes en formato Excel');
 
-      final File file = File(path);
-      await file.writeAsString(csv);
-
-      // Show success message
+      // Mostrar mensaje de éxito
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('CSV file saved to $path')),
+        SnackBar(content: Text('Archivo Excel guardado en $path')),
       );
     } catch (e) {
-      // Show error message
+      // Mostrar mensaje de error
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to export CSV: $e')),
+        SnackBar(content: Text('Error al exportar Excel: $e')),
       );
     }
   }
 
-  Future<void> exportToExcel(
+  Future<void> exportAndShareExcel(
       BuildContext context, List<OrderModel> orders) async {
     try {
-      // Prompt the user to select a directory
-      String? directoryPath = await FilePicker.platform.getDirectoryPath();
-
-      if (directoryPath == null) {
-        // User canceled the picker
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export canceled')),
-        );
-        return;
-      }
+      // Sort orders by date
+      orders.sort((a, b) => a.date.compareTo(b.date));
 
       var excel = Excel.createExcel();
 
@@ -234,15 +295,20 @@ class DataBase extends ChangeNotifier {
         ]);
       }
 
-      // Save the file to the selected directory
-      final String path = '$directoryPath/orders.xlsx';
+      // Get the temporary directory of the device
+      final directory = await getTemporaryDirectory();
 
-      excel.save(fileName: path);
+      // Define the path to save the file temporarily
+      final String path = p.join(directory.path, 'orders.xlsx');
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Excel file saved to $path')),
-      );
+      // Save the file temporarily
+      final File file = File(path)
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(excel.encode()!);
+
+      // Share the file using share_plus
+      await Share.shareFiles([path],
+          text: 'Here are the orders in Excel format');
     } catch (e) {
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -412,55 +478,18 @@ class DataBase extends ChangeNotifier {
   }
 
   Future<List<OrderModel>> getAllOrdersWithProducts() async {
-    final db = await getDatabase();
-    final List<Map<String, dynamic>> orderMaps = await db.query('orders');
-    List<OrderModel> orders = [];
-
     try {
-      for (var orderMap in orderMaps) {
-        List<ProductModel> products = [];
+      final db = await getDatabase();
+      final List<Map<String, dynamic>> maps = await db.query('orders');
 
-        // Get product entries linked to the order
-        final List<Map<String, dynamic>> orderProductMaps = await db.query(
-          'order_products',
-          where: 'orderId = ?',
-          whereArgs: [orderMap['id']],
-        );
-
-        print(
-            'Order ID ${orderMap['id']} has ${orderProductMaps.length} products linked.');
-
-        for (var orderProductMap in orderProductMaps) {
-          final List<Map<String, dynamic>> productMaps = await db.query(
-            'products',
-            where: 'id = ?',
-            whereArgs: [orderProductMap['productId']],
-          );
-
-          if (productMaps.isNotEmpty) {
-            var product = ProductModel.fromMap(productMaps.first);
-            product = product.copyWith(
-                quantity: ValueNotifier<int>(orderProductMap['quantity']));
-            products.add(product);
-          }
-        }
-
-        if (products.isNotEmpty) {
-          print(
-              'Products added for order ID ${orderMap['id']}: ${products.map((p) => p.name).join(', ')}');
-        } else {
-          print('No products found for order ID ${orderMap['id']}.');
-        }
-
-        OrderModel order = OrderModel.fromMap(orderMap);
-        order = order.copyWith(productList: products);
-        orders.add(order);
-      }
+      return List<OrderModel>.from(
+        maps.map((order) => OrderModel.fromMap(order)),
+      );
     } catch (e) {
+      // Handle the error by logging it, showing a message, etc.
       print('Error fetching orders with products: $e');
+      return []; // Return an empty list or handle it according to your logic
     }
-
-    return orders;
   }
 
   Future<void> updateProduct(ProductModel product) async {
@@ -511,7 +540,9 @@ class DataBase extends ChangeNotifier {
           whereArgs: [product.id],
         );
 
-        if (productData.isNotEmpty) {
+        if (productData.isNotEmpty &&
+                product.productType == "Producto terminado" ||
+            product.productType == "Materia prima") {
           var currentAmount = productData.first['amount'] as int;
           var newAmount = currentAmount - product.quantity!.value;
 
@@ -578,21 +609,25 @@ class DataBase extends ChangeNotifier {
     }
   }
 
-  Future<int> getTotalOrdersCount() async {
+  Future<int> getTotalOrdersCount(String status) async {
     final db = await getDatabase();
 
-    // Get the total count of orders from the database
-    final result =
-        await db.rawQuery('SELECT COUNT(*) as totalOrders FROM orders');
+    if (status == "COMPRA") {}
+
+    // Get the total count of orders with orderId containing the specified status
+    // and margin is null or empty
+    final result = await db.rawQuery(
+        'SELECT COUNT(*) as totalOrders FROM orders WHERE orderId LIKE ? AND (margen IS NULL OR margen = "")',
+        ['%$status%']);
 
     int totalOrders;
     if (result.isNotEmpty && result.first['totalOrders'] != null) {
       totalOrders = result.first['totalOrders'] as int;
     } else {
-      totalOrders = 0; // Default to 0 if no orders are found
+      totalOrders = 1; // Default to 0 if no orders are found
     }
 
-    return totalOrders;
+    return totalOrders + 1;
   }
 
   Future<void> createOrderWithProducts(
@@ -603,6 +638,9 @@ class DataBase extends ChangeNotifier {
       // Debugging: Check the order map before insertion
       Map<String, dynamic> orderMap = order.toMap();
       print('Order Map: $orderMap');
+      // final orderNom = order.orderId;
+
+      // Assign the orderId to the order object with your custom string
 
       await db.transaction((txn) async {
         try {
@@ -612,9 +650,10 @@ class DataBase extends ChangeNotifier {
             orderMap,
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
+          // order.orderId = "$orderNom $orderId";
 
-          // Log the order ID to verify it was created
-          print('Inserted order with ID: $orderId');
+          // Log the custom order ID to verify it was assigned
+          print('Custom Order ID: ${order.orderId}');
 
           // Insert the products linked to the order without altering their quantity
           for (var product in products) {
@@ -674,7 +713,7 @@ class DataBase extends ChangeNotifier {
     }
   }
 
-  Future<void> updateOrderWithProducts(int orderId, OrderModel updatedOrder,
+  Future<void> updateOrderWithProducts(String orderId, OrderModel updatedOrder,
       List<ProductModel> updatedProducts) async {
     final db = await getDatabase();
 
@@ -774,10 +813,37 @@ class DataBase extends ChangeNotifier {
     }
   }
 
-  // Method to back up the database
-  Future<void> backupDatabase() async {
-    String jsonString = await exportDatabaseToJson();
-    await saveJsonToFile(jsonString);
+  Future<bool> backupDatabase() async {
+    try {
+      // Generate the JSON string
+      String jsonString = await exportDatabaseToJson();
+
+      // Get the directory to save the file
+      final directory = await getTemporaryDirectory();
+
+      // Create a .json file in the directory
+      final file = File('${directory.path}/backup.json');
+
+      // Write the JSON string to the file
+      await file.writeAsString(jsonString);
+
+      // Verify that the file exists and was written successfully
+      if (await file.exists()) {
+        // Share the file
+        await Share.shareFiles([file.path],
+            text: 'Here is your database backup.');
+
+        // Return true if the file was successfully shared
+        return true;
+      } else {
+        // If the file does not exist or wasn't created properly, return false
+        return false;
+      }
+    } catch (e) {
+      // If there is any error, print it (for debugging) and return false
+      print('Failed to backup database: $e');
+      return false;
+    }
   }
 
   // Method to load data from a JSON file
@@ -845,6 +911,29 @@ class DataBase extends ChangeNotifier {
         orderProduct,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+    }
+  }
+
+  Future<void> updateOrderStatus(int orderId, String newStatus) async {
+    final db = await getDatabase();
+
+    try {
+      int count = await db.update(
+        'orders',
+        {'status': newStatus},
+        where: 'id = ?',
+        whereArgs: [orderId],
+      );
+
+      if (count > 0) {
+        print('Order status updated successfully for order ID $orderId');
+      } else {
+        print('Order with ID $orderId not found');
+      }
+
+      notifyListeners(); // Notify listeners to refresh UI or perform other actions
+    } catch (e) {
+      print('Error updating order status: $e');
     }
   }
 }

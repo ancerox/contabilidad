@@ -31,13 +31,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   ValueNotifier<double> totalPriceNotifier = ValueNotifier<double>(0.0);
 
   int? orderId;
-  String? _selectedOption;
+  String? _selectedOption = "";
   double margin = 0;
   int totalOwned = 0;
   int grantTotalCost = 0;
   int grantTotalPrice = 0;
   int grantTotalOwned = 0;
   List<PagoModel> pagos = [];
+  String optionSelectedVenta = "Venta";
+  late int newOrderNumber = 0;
 
   late DataBase dataBaseProvider;
   final Map<String, ValueNotifier<int>> _quantityNotifiers = {};
@@ -61,7 +63,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   Map<int, DateTime?> startDays = {};
   Map<int, DateTime?> endDays = {};
   Map<int, RangeSelectionMode> rangeSelectionModes = {};
-  int _orderNumber = 0;
 
   Map<int, ValueNotifier<int>> productQuantities = {};
   bool isOrdenExpress = false;
@@ -99,8 +100,14 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   void _onOptionSelected(String option) async {
+    optionSelectedVenta = option;
+
     if (dataBaseProvider.selectedProductsNotifier.value.isNotEmpty ||
         productDateRanges.isNotEmpty) {
+      if (_selectedOption == option) {
+        return;
+      }
+
       final onOptionSelected = await _showConfirmationDialog(context);
       if (onOptionSelected == true) {
         setState(() {
@@ -112,8 +119,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           rangeSelectionModes.clear();
           focusedDays.clear();
         });
+
         return;
       } else {
+        optionSelectedVenta = "";
+        setState(() {});
         return;
       }
     }
@@ -144,18 +154,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchNextOrderNumber() async {
-    final nextOrderNumber = await dataBaseProvider.getTotalOrdersCount();
+  // Future<void> _fetchNextOrderNumber() async {
+  //   final nextOrderNumber = await dataBaseProvider.getTotalOrdersCount("ORDEN");
 
-    if (nextOrderNumber == 0) {
-      setState(() {
-        _orderNumber = 1;
-      });
-      return;
-    }
-    _orderNumber = nextOrderNumber + 1;
-    setState(() {});
-  }
+  //   if (nextOrderNumber == 0) {
+  //     setState(() {
+  //       _orderNumber = 1;
+  //     });
+  //     return;
+  //   }
+  //   _orderNumber = nextOrderNumber;
+  //   setState(() {});
+  // }
 
   void _selectDate(
       BuildContext context, TextEditingController controller) async {
@@ -217,13 +227,17 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   _onCreateOrder() async {
-    if (_formKey.currentState!.validate()) {
+    if (isOrdenExpress || _formKey.currentState!.validate()) {
       if (_totalController.text.isEmpty) _totalController.text = "0";
 
-      int newOrderNumber = await dataBaseProvider.getTotalOrdersCount();
-
       final listProducts = dataBaseProvider.selectedProductsNotifier.value;
+
+      // final isPaid =
+      //     pagos.fold(0, (sum, element) => sum + element.amount.toInt()) >=
+      //         dataBaseProvider.totalPriceNotifier.value;
+
       final order = OrderModel(
+          orderId: "ORDEN $newOrderNumber",
           adminExpenses: dataBaseProvider.selectedCommodities.value,
           datesInUse: productDateRanges,
           pagos: pagos,
@@ -237,10 +251,19 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           direccion: _directionController.text,
           date: _dateController.text,
           comment: _commnetController.text,
-          totalCost: dataBaseProvider.totalPriceNotifier.value);
+          totalCost: dataBaseProvider.totalPriceNotifier.value,
+          totalCostSpent: listProducts.fold(
+                  0,
+                  (previousValue, element) =>
+                      element.quantity!.value * element.cost) +
+              dataBaseProvider.selectedCommodities.value.fold(
+                  0,
+                  (previousValue, element) =>
+                      element.quantity!.value * element.cost));
 
       if (widget.isEditPage && widget.order != null) {
         order.id = orderId;
+        order.orderId = widget.order!.orderId;
       }
       final earningsCommodities =
           dataBaseProvider.selectedCommodities.value.fold(0.0, (sum, product) {
@@ -250,10 +273,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => OrderCreatedScreen(
+            selectedOption: _selectedOption ?? "Venta",
             isEditPage: widget.isEditPage,
-            orderId: widget.isEditPage ? widget.order!.id! : order.id ?? 0,
-            totalOwned: totalOwnedGlobal,
-            orderNumber: _orderNumber,
+            orderId: order.id.toString(),
+            totalOwned: totalOwned.toString(),
+            orderNumber: newOrderNumber,
             totalPrice:
                 dataBaseProvider.totalPriceNotifier.value + earningsCommodities,
             markedDays: productDateRanges.values.expand((e) => e).toList(),
@@ -273,11 +297,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     for (int i = 0; i < products.value.length; i++) {
       _unitPriceControllers[i] = TextEditingController();
     }
+    getOrderCount();
     _dateController.text = DateFormat('MM/dd/yyyy').format(DateTime.now());
     _calendarFormat = CalendarFormat.month;
     _focusedDay = DateTime.now();
     _selectedDay = _focusedDay;
-    _fetchNextOrderNumber();
+
+    // _fetchNextOrderNumber();
 
     if (widget.isEditPage && widget.order != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -286,6 +312,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         setState(() {});
       });
     }
+  }
+
+  void getOrderCount() async {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      newOrderNumber = await dataBaseProvider.getTotalOrdersCount("ORDEN");
+      setState(() {});
+    });
   }
 
   void _initializeEditOrder() {
@@ -322,10 +355,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     bool hasDatesUsed = widget.order!.productList!.any((product) =>
         product.datesUsed != null && product.datesUsed!.isNotEmpty);
 
+    setState(() {
+      _selectedOption = "Venta";
+    });
+
     if (hasDatesUsed) {
       setState(() {
         _selectedOption = 'Alquiler';
       });
+
       if (widget.order == null || widget.order!.datesInUse == null) return;
 
       for (var product in widget.order!.productList!) {
@@ -401,6 +439,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     for (ProductModel product in products) {
       totalPrice += product.unitPrice * product.quantity!.value;
     }
+    dataBaseProvider.totalPrice = totalPrice;
     return totalPrice;
   }
 
@@ -461,6 +500,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     onTap: () {
                       setState(() {
                         isOrdenExpress = !isOrdenExpress;
+
+                        dataBaseProvider.selectedProductsNotifier.value = [];
+                        productDateRanges.clear();
+                        startDays.clear();
+                        endDays.clear();
+                        rangeSelectionModes.clear();
+                        focusedDays.clear();
+
+                        return;
                       });
                     },
                     child: Container(
@@ -514,12 +562,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
+                    Text(
+                        'Ordern #${widget.isEditPage ? widget.order!.id : newOrderNumber}',
+                        style: const TextStyle(color: Colors.grey)),
                     const Text('Información de la orden',
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 20),
                     const Text('Por favor, selecione el tipo de producto'),
                     const SizedBox(height: 5),
                     WidgetSelector(
+                      optionSelectedVenta: optionSelectedVenta,
                       onOptionSelected: dataBaseProvider
                               .selectedProductsNotifier.value.isNotEmpty ||
                           productDateRanges.isNotEmpty,
@@ -536,6 +588,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       valueListenable:
                           dataBaseProvider.selectedProductsNotifier,
                       builder: (context, selectedProducts, child) {
+                        selectedProducts.sort((a, b) => a.name
+                            .toLowerCase()
+                            .compareTo(b.name.toLowerCase()));
+
                         int totalquantity = selectedProducts.fold(
                             0,
                             (int sum, ProductModel product) =>
@@ -564,97 +620,107 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             _selectedOption == 'Alquiler'
                                 ? Container()
                                 : Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: const BoxDecoration(
-                                        color:
-                                            Color.fromARGB(255, 225, 225, 225)),
-                                    height: MediaQuery.of(context).size.height *
-                                        0.3,
-                                    child: ListView.builder(
-                                      itemCount: selectedProducts.length,
-                                      itemBuilder: (context, index) {
-                                        final product = selectedProducts[index];
-                                        final unitPriceControllers =
-                                            _unitPriceControllers[product.id] ??
-                                                TextEditingController();
-                                        final controller =
-                                            _getOrCreateController(
-                                                product.id.toString());
-                                        double unitPrice = double.tryParse(
-                                                product.unitPrice.toString()) ??
-                                            0.0;
-                                        int quantity = product.quantity!.value;
+                                    decoration: const BoxDecoration(),
+                                    child: LayoutBuilder(
+                                      builder: (BuildContext context,
+                                          BoxConstraints constraints) {
+                                        return ListView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(), // Desactiva el scroll para que se extienda dinámicamente
+                                          itemCount: selectedProducts.length,
+                                          itemBuilder: (context, index) {
+                                            final product =
+                                                selectedProducts[index];
+                                            final unitPriceControllers =
+                                                _unitPriceControllers[
+                                                        product.id] ??
+                                                    TextEditingController();
+                                            final controller =
+                                                _getOrCreateController(
+                                                    product.id.toString());
+                                            double unitPrice = double.tryParse(
+                                                    product.unitPrice
+                                                        .toString()) ??
+                                                0.0;
+                                            int quantity =
+                                                product.quantity!.value;
 
-                                        double totalPrice =
-                                            quantity * unitPrice;
-                                        double totalcost =
-                                            product.cost.toDouble() * quantity;
+                                            double totalPrice =
+                                                quantity * unitPrice;
+                                            double totalcost =
+                                                product.cost.toDouble() *
+                                                    quantity;
 
-                                        unitPriceControllers.text =
-                                            totalPrice.toString();
+                                            unitPriceControllers.text =
+                                                totalPrice.toString();
 
-                                        return Item(
-                                          subProducts: product.subProduct,
-                                          costOnChange: (String value) {
-                                            if (value != "") {
-                                              product.cost = int.parse(value);
-                                              _calculateTotalPrice();
-                                            }
-                                          },
-                                          onFieldSubmitted: (String value) {
-                                            setState(() {});
-                                          },
-                                          cost: totalcost.toInt(),
-                                          imagePath: product.file!,
-                                          name: product.name,
-                                          precio: product.unitPrice,
-                                          quantityOnChange: (String value) {
-                                            if (value == "") {
-                                              return;
-                                            }
-                                            product.quantity!.value =
-                                                int.parse(value);
-                                            _updateCheckoutButtonState();
-                                            _updateSelectedProductQuantity(
-                                                product,
-                                                int.parse(controller.text),
-                                                true);
-                                            totalOwned =
-                                                totalquantity - grantTotalOwned;
-                                            _calculateTotalPrice();
-                                            setState(() {});
-                                          },
-                                          plus: () {
-                                            product.quantity!.value++;
-                                            _updateCheckoutButtonState();
-                                            _updateSelectedProductQuantity(
-                                                product, 1, false);
-                                            _calculateTotalPrice();
-                                            setState(() {});
-                                          },
-                                          minus: () {
-                                            if (product.quantity!.value == 1) {
-                                              setState(() {
-                                                selectedProducts
-                                                    .remove(product);
+                                            return Item(
+                                              subProducts: product.subProduct,
+                                              costOnChange: (String value) {
+                                                if (value != "") {
+                                                  product.cost =
+                                                      int.parse(value);
+                                                  _calculateTotalPrice();
+                                                }
+                                              },
+                                              onFieldSubmitted: (String value) {
+                                                setState(() {});
+                                              },
+                                              cost: totalcost.toInt(),
+                                              imagePath: product.file!,
+                                              name: product.name,
+                                              precio: product.unitPrice,
+                                              quantityOnChange: (String value) {
+                                                if (value == "") {
+                                                  return;
+                                                }
+                                                product.quantity!.value =
+                                                    int.parse(value);
+                                                _updateCheckoutButtonState();
+                                                _updateSelectedProductQuantity(
+                                                    product,
+                                                    int.parse(controller.text),
+                                                    true);
+                                                totalOwned = totalquantity -
+                                                    grantTotalOwned;
                                                 _calculateTotalPrice();
-                                              });
-                                              return;
-                                            }
+                                                setState(() {});
+                                              },
+                                              plus: () {
+                                                product.quantity!.value++;
+                                                _updateCheckoutButtonState();
+                                                _updateSelectedProductQuantity(
+                                                    product, 1, false);
+                                                _calculateTotalPrice();
+                                                setState(() {});
+                                              },
+                                              minus: () {
+                                                if (product.quantity!.value ==
+                                                    1) {
+                                                  setState(() {
+                                                    selectedProducts
+                                                        .remove(product);
+                                                    _calculateTotalPrice();
+                                                  });
+                                                  return;
+                                                }
 
-                                            product.quantity!.value--;
-                                            _updateCheckoutButtonState();
-                                            _updateSelectedProductQuantity(
-                                                product, -1, false);
-                                            _calculateTotalPrice();
-                                            setState(() {});
+                                                product.quantity!.value--;
+                                                _updateCheckoutButtonState();
+                                                _updateSelectedProductQuantity(
+                                                    product, -1, false);
+                                                _calculateTotalPrice();
+                                                setState(() {});
+                                              },
+                                              hasTrailing: true,
+                                              quantity: product.quantity!,
+                                              quantityCTRController: controller,
+                                              magnitud: product.unit,
+                                              unitPriceCTRController:
+                                                  unitPriceControllers,
+                                            );
                                           },
-                                          hasTrailing: true,
-                                          quantity: product.quantity!,
-                                          quantityCTRController: controller,
-                                          magnitud: product.unit,
-                                          unitPriceCTRController:
-                                              unitPriceControllers,
                                         );
                                       },
                                     ),
@@ -715,9 +781,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                   const EdgeInsets.symmetric(horizontal: 10),
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color:
-                                      const Color.fromARGB(255, 202, 202, 202)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
@@ -795,7 +860,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     Text(
-                        'Ordern #${widget.isEditPage ? widget.order!.id : _orderNumber}',
+                        widget.isEditPage
+                            ? widget.order!.orderId
+                            : "ORDEN $newOrderNumber",
                         style: const TextStyle(color: Colors.grey)),
                     const SizedBox(height: 20),
                     const Text('Información contacto',
@@ -855,6 +922,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     const Text('Por favor, selecione el tipo de producto'),
                     const SizedBox(height: 5),
                     WidgetSelector(
+                      optionSelectedVenta: optionSelectedVenta,
                       onOptionSelected: dataBaseProvider
                               .selectedProductsNotifier.value.isNotEmpty ||
                           productDateRanges.isNotEmpty,
@@ -867,594 +935,776 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     ),
                     const SizedBox(height: 10),
                     ValueListenableBuilder<List<ProductModel>>(
-                      valueListenable:
-                          dataBaseProvider.selectedProductsNotifier,
-                      builder: (context, selectedProducts, child) {
-                        int totalquantity = selectedProducts.fold(
-                            0,
-                            (int sum, ProductModel product) =>
-                                sum +
-                                product.unitPrice.toInt() *
-                                    product.quantity!.value);
-                        int totalCost = selectedProducts.fold(
-                            0,
-                            (int sum, ProductModel product) =>
-                                sum +
-                                product.cost.toInt() * product.quantity!.value);
-                        totalOwned = totalquantity - grantTotalOwned;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (_selectedOption == 'Alquiler')
-                              AlquilerWidget(
-                                startDays: startDays,
-                                endDays: endDays,
-                                isEditPage: widget.isEditPage,
-                                selectedDay: _focusedDay,
-                                showCalendar: showCalendar,
-                                productDateRanges: productDateRanges,
-                                calculateTotalCost: calculateTotalCostRent,
-                              ),
-                            _selectedOption == 'Alquiler'
-                                ? Container()
-                                : Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: const BoxDecoration(
-                                            color: Color.fromARGB(
-                                                255, 225, 225, 225)),
-                                        height:
-                                            MediaQuery.of(context).size.height *
-                                                0.3,
-                                        child: ListView.builder(
-                                          itemCount: selectedProducts.length,
-                                          itemBuilder: (context, index) {
-                                            final product =
-                                                selectedProducts[index];
-                                            final unitPriceControllers =
-                                                _unitPriceControllers[
-                                                        product.id] ??
-                                                    TextEditingController();
-                                            final controller =
-                                                _getOrCreateController(
-                                                    product.id.toString());
-                                            double unitPrice = double.tryParse(
-                                                    product.unitPrice
-                                                        .toString()) ??
-                                                0.0;
-                                            int quantity =
-                                                product.quantity!.value;
-
-                                            double totalPrice =
-                                                quantity * unitPrice;
-                                            int totalcost =
-                                                product.cost.toInt() * quantity;
-
-                                            unitPriceControllers.text =
-                                                totalPrice.toString();
-
-                                            return Item(
-                                              subProducts: product.subProduct,
-                                              costOnChange: (String value) {
-                                                if (value != "") {
-                                                  product.cost =
-                                                      int.parse(value);
-                                                  _calculateTotalPrice();
-                                                }
-                                              },
-                                              onFieldSubmitted: (String value) {
-                                                setState(() {});
-                                              },
-                                              cost: totalcost,
-                                              imagePath: product.file!,
-                                              name: product.name,
-                                              precio: product.unitPrice,
-                                              quantityOnChange: (String value) {
-                                                if (value == "") {
-                                                  return;
-                                                }
-                                                product.quantity!.value =
-                                                    int.parse(value);
-                                                _updateCheckoutButtonState();
-                                                _updateSelectedProductQuantity(
-                                                    product,
-                                                    int.parse(controller.text),
-                                                    true);
-                                                totalOwned = totalquantity -
-                                                    grantTotalOwned;
-                                                _calculateTotalPrice();
-                                                setState(() {});
-                                              },
-                                              plus: () {
-                                                product.quantity!.value++;
-                                                _updateCheckoutButtonState();
-                                                _updateSelectedProductQuantity(
-                                                    product, 1, false);
-                                                _calculateTotalPrice();
-                                                setState(() {});
-                                              },
-                                              minus: () {
-                                                if (product.quantity!.value ==
-                                                    1) {
-                                                  setState(() {
-                                                    selectedProducts
-                                                        .remove(product);
-                                                    _calculateTotalPrice();
-                                                  });
-                                                  return;
-                                                }
-
-                                                product.quantity!.value--;
-                                                _updateCheckoutButtonState();
-                                                _updateSelectedProductQuantity(
-                                                    product, -1, false);
-                                                _calculateTotalPrice();
-                                                setState(() {});
-                                              },
-                                              hasTrailing: true,
-                                              quantity: product.quantity!,
-                                              quantityCTRController: controller,
-                                              magnitud: product.unit,
-                                              unitPriceCTRController:
-                                                  unitPriceControllers,
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ],
+                      valueListenable: dataBaseProvider.selectedCommodities,
+                      builder: (context, selectedCommodities, child) {
+                        return ValueListenableBuilder<List<ProductModel>>(
+                          valueListenable:
+                              dataBaseProvider.selectedProductsNotifier,
+                          builder: (context, selectedProducts, child) {
+                            int totalquantity = selectedProducts.fold(
+                                0,
+                                (int sum, ProductModel product) =>
+                                    sum +
+                                    product.unitPrice.toInt() *
+                                        product.quantity!.value);
+                            int totalCost = selectedProducts.fold(
+                                0,
+                                (int sum, ProductModel product) =>
+                                    sum +
+                                    product.cost.toInt() *
+                                        product.quantity!.value);
+                            totalOwned = totalquantity - grantTotalOwned;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (_selectedOption == 'Alquiler')
+                                  AlquilerWidget(
+                                    startDays: startDays,
+                                    endDays: endDays,
+                                    isEditPage: widget.isEditPage,
+                                    selectedDay: _focusedDay,
+                                    showCalendar: showCalendar,
+                                    productDateRanges: productDateRanges,
+                                    calculateTotalCost: calculateTotalCostRent,
                                   ),
-                            _selectedOption == 'Alquiler'
-                                ? Container()
-                                : ValueListenableBuilder<List<ProductModel>>(
-                                    valueListenable: dataBaseProvider
-                                        .selectedProductsNotifier,
-                                    builder:
-                                        (context, olselectedProducts, child) {
-                                      return Column(
+                                _selectedOption == 'Alquiler'
+                                    ? Container()
+                                    : Column(
                                         children: [
-                                          Column(
+                                          ListView.builder(
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            shrinkWrap: true,
+                                            itemCount: selectedProducts.length,
+                                            itemBuilder: (context, index) {
+                                              final product =
+                                                  selectedProducts[index];
+                                              final unitPriceControllers =
+                                                  _unitPriceControllers[
+                                                          product.id] ??
+                                                      TextEditingController();
+                                              final controller =
+                                                  _getOrCreateController(
+                                                      product.id.toString());
+                                              double unitPrice =
+                                                  double.tryParse(product
+                                                          .unitPrice
+                                                          .toString()) ??
+                                                      0.0;
+                                              int quantity =
+                                                  product.quantity!.value;
+
+                                              double totalPrice =
+                                                  quantity * unitPrice;
+                                              int totalcost =
+                                                  product.cost.toInt() *
+                                                      quantity;
+
+                                              unitPriceControllers.text =
+                                                  totalPrice.toString();
+
+                                              return Item(
+                                                subProducts: product.subProduct,
+                                                costOnChange: (String value) {
+                                                  if (value != "") {
+                                                    product.cost =
+                                                        int.parse(value);
+                                                    _calculateTotalPrice();
+                                                  }
+                                                },
+                                                onFieldSubmitted:
+                                                    (String value) {
+                                                  setState(() {});
+                                                },
+                                                cost: totalcost,
+                                                imagePath: product.file!,
+                                                name: product.name,
+                                                precio: product.unitPrice,
+                                                quantityOnChange:
+                                                    (String value) {
+                                                  if (value == "") {
+                                                    return;
+                                                  }
+                                                  product.quantity!.value =
+                                                      int.parse(value);
+                                                  _updateCheckoutButtonState();
+                                                  _updateSelectedProductQuantity(
+                                                      product,
+                                                      int.parse(
+                                                          controller.text),
+                                                      true);
+                                                  totalOwned = totalquantity -
+                                                      grantTotalOwned;
+                                                  _calculateTotalPrice();
+                                                  setState(() {});
+                                                },
+                                                plus: () {
+                                                  product.quantity!.value++;
+                                                  _updateCheckoutButtonState();
+                                                  _updateSelectedProductQuantity(
+                                                      product, 1, false);
+                                                  _calculateTotalPrice();
+                                                  setState(() {});
+                                                },
+                                                minus: () {
+                                                  if (product.quantity!.value ==
+                                                      1) {
+                                                    setState(() {
+                                                      selectedProducts
+                                                          .remove(product);
+                                                      _calculateTotalPrice();
+                                                    });
+                                                    return;
+                                                  }
+
+                                                  product.quantity!.value--;
+                                                  _updateCheckoutButtonState();
+                                                  _updateSelectedProductQuantity(
+                                                      product, -1, false);
+                                                  _calculateTotalPrice();
+                                                  setState(() {});
+                                                },
+                                                hasTrailing: true,
+                                                quantity: product.quantity!,
+                                                quantityCTRController:
+                                                    controller,
+                                                magnitud: product.unit,
+                                                unitPriceCTRController:
+                                                    unitPriceControllers,
+                                              );
+                                            },
+                                          ),
+                                          selectedCommodities.isEmpty
+                                              ? Container()
+                                              : const Text(
+                                                  "Costos adicionales"),
+                                          selectedCommodities.isEmpty
+                                              ? Container()
+                                              : const Divider(),
+                                          ListView.builder(
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            shrinkWrap: true,
+                                            itemCount:
+                                                selectedCommodities.length,
+                                            itemBuilder: (context, index) {
+                                              final product =
+                                                  selectedCommodities[index];
+                                              final unitPriceControllers =
+                                                  _unitPriceControllers[
+                                                          product.id] ??
+                                                      TextEditingController();
+                                              final controller =
+                                                  _getOrCreateController(
+                                                      product.id.toString());
+                                              double unitPrice =
+                                                  double.tryParse(product
+                                                          .unitPrice
+                                                          .toString()) ??
+                                                      0.0;
+                                              int quantity =
+                                                  product.quantity!.value;
+
+                                              double totalPrice =
+                                                  quantity * unitPrice;
+                                              int totalcost =
+                                                  product.cost.toInt() *
+                                                      quantity;
+
+                                              unitPriceControllers.text =
+                                                  totalPrice.toString();
+
+                                              return Item(
+                                                subProducts: product.subProduct,
+                                                costOnChange: (String value) {
+                                                  if (value != "") {
+                                                    product.cost =
+                                                        int.parse(value);
+                                                    _calculateTotalPrice();
+                                                  }
+                                                },
+                                                onFieldSubmitted:
+                                                    (String value) {
+                                                  setState(() {});
+                                                },
+                                                cost: totalcost,
+                                                imagePath: product.file!,
+                                                name: product.name,
+                                                precio: product.unitPrice,
+                                                quantityOnChange:
+                                                    (String value) {
+                                                  if (value == "") {
+                                                    return;
+                                                  }
+                                                  product.quantity!.value =
+                                                      int.parse(value);
+                                                  _updateCheckoutButtonState();
+                                                  _updateSelectedProductQuantity(
+                                                      product,
+                                                      int.parse(
+                                                          controller.text),
+                                                      true);
+                                                  totalOwned = totalquantity -
+                                                      grantTotalOwned;
+                                                  _calculateTotalPrice();
+                                                  setState(() {});
+                                                },
+                                                plus: () {
+                                                  product.quantity!.value++;
+                                                  _updateCheckoutButtonState();
+                                                  _updateSelectedProductQuantity(
+                                                      product, 1, false);
+                                                  _calculateTotalPrice();
+                                                  setState(() {});
+                                                },
+                                                minus: () {
+                                                  if (product.quantity!.value ==
+                                                      1) {
+                                                    setState(() {
+                                                      selectedCommodities
+                                                          .remove(product);
+                                                      _calculateTotalPrice();
+                                                    });
+                                                    return;
+                                                  }
+
+                                                  product.quantity!.value--;
+                                                  _updateCheckoutButtonState();
+                                                  _updateSelectedProductQuantity(
+                                                      product, -1, false);
+                                                  _calculateTotalPrice();
+                                                  setState(() {});
+                                                },
+                                                hasTrailing: true,
+                                                quantity: product.quantity!,
+                                                quantityCTRController:
+                                                    controller,
+                                                magnitud: product.unit,
+                                                unitPriceCTRController:
+                                                    unitPriceControllers,
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                _selectedOption == 'Alquiler'
+                                    ? Container()
+                                    : ValueListenableBuilder<
+                                        List<ProductModel>>(
+                                        valueListenable: dataBaseProvider
+                                            .selectedProductsNotifier,
+                                        builder: (context, olselectedProducts,
+                                            child) {
+                                          return Column(
                                             children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
+                                              Column(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
                                                         horizontal: 20),
-                                                height: 40,
-                                                decoration: const BoxDecoration(
-                                                    color: Color.fromARGB(
-                                                        255, 226, 213, 78)),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  children: [
-                                                    const Text("Precio Total",
-                                                        style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 15)),
-                                                    ValueListenableBuilder<
-                                                        double>(
-                                                      valueListenable:
-                                                          totalPriceNotifier,
-                                                      builder: (context,
-                                                          totalPrice, child) {
-                                                        return Text(
-                                                          "\$ ${olselectedProducts.isNotEmpty ? precioTotalSell(olselectedProducts).toStringAsFixed(2) : totalPrice}",
-                                                          style:
-                                                              const TextStyle(
+                                                    height: 40,
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                            color:
+                                                                Color.fromARGB(
+                                                                    255,
+                                                                    226,
+                                                                    213,
+                                                                    78)),
+                                                    child: Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        const Text(
+                                                            "Precio Total",
+                                                            style: TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 15)),
+                                                        ValueListenableBuilder<
+                                                            double>(
+                                                          valueListenable:
+                                                              totalPriceNotifier,
+                                                          builder: (context,
+                                                              totalPrice,
+                                                              child) {
+                                                            int adminCost = dataBaseProvider
+                                                                .selectedCommodities
+                                                                .value
+                                                                .fold(
+                                                                    0,
+                                                                    (int sum,
+                                                                            ProductModel
+                                                                                product) =>
+                                                                        sum +
+                                                                        product.unitPrice.toInt() *
+                                                                            product.quantity!.value);
+                                                            totalPrice +=
+                                                                adminCost;
+                                                            return Text(
+                                                              "\$ ${olselectedProducts.isNotEmpty ? precioTotalSell(olselectedProducts) + adminCost : totalPrice}",
+                                                              style: const TextStyle(
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .bold,
                                                                   fontSize: 15),
-                                                        );
-                                                      },
+                                                            );
+                                                          },
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
-                                              const SizedBox(
-                                                height: 10,
-                                              ),
-                                              ElevatedButton(
-                                                onPressed: () {
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                        builder: (context) =>
-                                                            const ChooseComponentScreen()),
-                                                  ).then((value) =>
-                                                      print("$value TESTO"));
-                                                },
-                                                child: const Text(
-                                                    'Costos adicionales'),
-                                              ),
+                                                  ),
+                                                  const SizedBox(
+                                                    height: 10,
+                                                  ),
+                                                  ElevatedButton(
+                                                    onPressed: () {
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                            builder: (context) =>
+                                                                const ChooseComponentScreen()),
+                                                      ).then((value) => print(
+                                                          "$value TESTO"));
+                                                    },
+                                                    child: const Text(
+                                                        'Costos adicionales'),
+                                                  ),
+                                                ],
+                                              )
                                             ],
-                                          )
-                                        ],
-                                      );
-                                    },
-                                  ),
-                            const SizedBox(height: 20),
-                            const Text(
-                              'Ganancias',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                            Container(
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    spreadRadius: 2,
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: productDateRanges.values.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                        "Por favor, escoga una fecha",
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15),
+                                          );
+                                        },
                                       ),
-                                    )
-                                  : Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 10),
-                                      width: double.infinity,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          ValueListenableBuilder<double>(
-                                            valueListenable: dataBaseProvider
-                                                .totalPriceNotifier,
-                                            builder:
-                                                (context, totalOwned, child) {
-                                              return ValueListenableBuilder(
-                                                valueListenable: dataBaseProvider
-                                                    .selectedProductsNotifier,
-                                                builder: (context,
-                                                    selectedProducts, child) {
-                                                  return ValueListenableBuilder(
+                                const SizedBox(height: 20),
+                                const Text(
+                                  'Ganancias',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15),
+                                ),
+                                Container(
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.2),
+                                        spreadRadius: 2,
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child:
+                                      productDateRanges.values.isEmpty &&
+                                              dataBaseProvider
+                                                  .selectedProductsNotifier
+                                                  .value
+                                                  .isEmpty
+                                          ? const Center(
+                                              child: Text(
+                                                "Por favor, escoga una fecha",
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15),
+                                              ),
+                                            )
+                                          : Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 10),
+                                              width: double.infinity,
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  ValueListenableBuilder<
+                                                      double>(
                                                     valueListenable:
                                                         dataBaseProvider
-                                                            .selectedCommodities,
+                                                            .totalPriceNotifier,
                                                     builder: (context,
-                                                        selectedCommodities,
-                                                        child) {
-                                                      final alquilerTotal =
-                                                          totalOwned -
-                                                              selectedProducts
-                                                                  .fold(0, (summ,
-                                                                      product) {
-                                                                // final totalDays =
-                                                                //    data dateRanges.fold(
-                                                                //         0,
-                                                                //         (rangeSum,
-                                                                //             dateRange) {
-                                                                //   return rangeSum +
-                                                                //       dateRange
-                                                                //           .end!
-                                                                //           .difference(
-                                                                //               dateRange.start!)
-                                                                //           .inDays +
-                                                                //       1;
-                                                                // });
-                                                                int totalDays =
-                                                                    0;
-                                                                if (endDays[product
-                                                                            .id] !=
-                                                                        null &&
-                                                                    startDays[product
-                                                                            .id] !=
-                                                                        null) {
-                                                                  totalDays = endDays[product
-                                                                              .id]!
-                                                                          .difference(
-                                                                              startDays[product.id]!)
-                                                                          .inDays +
-                                                                      1;
-                                                                }
+                                                        totalOwned, child) {
+                                                      return ValueListenableBuilder(
+                                                        valueListenable:
+                                                            dataBaseProvider
+                                                                .selectedProductsNotifier,
+                                                        builder: (context,
+                                                            selectedProducts,
+                                                            child) {
+                                                          return ValueListenableBuilder(
+                                                            valueListenable:
+                                                                dataBaseProvider
+                                                                    .selectedCommodities,
+                                                            builder: (context,
+                                                                selectedCommodities,
+                                                                child) {
+                                                              final alquilerTotal =
+                                                                  totalOwned -
+                                                                      selectedProducts.fold(
+                                                                          0,
+                                                                          (summ,
+                                                                              product) {
+                                                                        // final totalDays =
+                                                                        //    data dateRanges.fold(
+                                                                        //         0,
+                                                                        //         (rangeSum,
+                                                                        //             dateRange) {
+                                                                        //   return rangeSum +
+                                                                        //       dateRange
+                                                                        //           .end!
+                                                                        //           .difference(
+                                                                        //               dateRange.start!)
+                                                                        //           .inDays +
+                                                                        //       1;
+                                                                        // });
+                                                                        int totalDays =
+                                                                            0;
+                                                                        if (endDays[product.id] !=
+                                                                                null &&
+                                                                            startDays[product.id] !=
+                                                                                null) {
+                                                                          totalDays =
+                                                                              endDays[product.id]!.difference(startDays[product.id]!).inDays + 1;
+                                                                        }
 
-                                                                final quantity =
-                                                                    product.quantity
-                                                                            ?.value ??
-                                                                        0;
-                                                                var totalCost =
-                                                                    product.cost *
-                                                                        quantity *
-                                                                        totalDays;
-                                                                if (quantity ==
-                                                                    0) {
-                                                                  return summ;
-                                                                }
+                                                                        final quantity =
+                                                                            product.quantity?.value ??
+                                                                                0;
+                                                                        var totalCost = product.cost *
+                                                                            quantity *
+                                                                            totalDays;
+                                                                        if (quantity ==
+                                                                            0) {
+                                                                          return summ;
+                                                                        }
 
-                                                                return summ +
-                                                                    totalCost
-                                                                        .toInt();
-                                                              }) +
-                                                              dataBaseProvider
-                                                                  .selectedCommodities
-                                                                  .value
-                                                                  .fold(0.0, (sum,
-                                                                      product) {
-                                                                return sum +
-                                                                    (product.unitPrice *
+                                                                        return summ +
+                                                                            totalCost.toInt();
+                                                                      }) +
+                                                                      dataBaseProvider
+                                                                          .selectedCommodities
+                                                                          .value
+                                                                          .fold(
+                                                                              0.0,
+                                                                              (sum, product) {
+                                                                        return sum +
+                                                                            (product.unitPrice *
+                                                                                product.quantity!.value);
+                                                                      }) -
+                                                                      dataBaseProvider
+                                                                          .selectedCommodities
+                                                                          .value
+                                                                          .fold(
+                                                                              0.0,
+                                                                              (previousValue, element) => previousValue + (element.cost * element.quantity!.value));
+
+                                                              final otherTotal = selectedProducts
+                                                                      .fold(0, (sum,
+                                                                          product) {
+                                                                    final unitPrice =
                                                                         product
-                                                                            .quantity!
-                                                                            .value);
-                                                              }) -
-                                                              dataBaseProvider
-                                                                  .selectedCommodities
-                                                                  .value
-                                                                  .fold(
-                                                                      0.0,
-                                                                      (previousValue,
-                                                                              element) =>
-                                                                          previousValue +
-                                                                          (element.cost *
-                                                                              element.quantity!.value));
+                                                                            .unitPrice;
+                                                                    final quantity =
+                                                                        product.quantity?.value ??
+                                                                            0;
+                                                                    final productCost =
+                                                                        product
+                                                                            .cost;
+                                                                    return sum +
+                                                                        ((unitPrice * quantity) -
+                                                                                (productCost * quantity))
+                                                                            .toInt();
+                                                                  }) +
+                                                                  dataBaseProvider
+                                                                      .selectedCommodities
+                                                                      .value
+                                                                      .fold(0.0,
+                                                                          (sum,
+                                                                              product) {
+                                                                    return sum +
+                                                                        (product.unitPrice *
+                                                                            product.quantity!.value);
+                                                                  }) -
+                                                                  dataBaseProvider
+                                                                      .selectedCommodities
+                                                                      .value
+                                                                      .fold(
+                                                                          0.0,
+                                                                          (previousValue, element) =>
+                                                                              previousValue +
+                                                                              (element.cost * element.quantity!.value));
+                                                              margin =
+                                                                  alquilerTotal;
 
-                                                      final otherTotal =
-                                                          selectedProducts.fold(
-                                                              0,
-                                                              (sum, product) {
-                                                        final unitPrice =
-                                                            product.unitPrice;
-                                                        final quantity = product
-                                                                .quantity
-                                                                ?.value ??
-                                                            0;
-                                                        final productCost =
-                                                            product.cost;
-                                                        return sum +
-                                                            ((unitPrice *
-                                                                        quantity) -
-                                                                    productCost)
-                                                                .toInt();
-                                                      });
-                                                      margin = alquilerTotal;
-                                                      return Text(
-                                                        _selectedOption ==
-                                                                'Alquiler'
-                                                            ? "$alquilerTotal"
-                                                            : "$otherTotal",
-                                                        style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 18,
-                                                        ),
+                                                              if (_selectedOption !=
+                                                                  "Alquiler") {
+                                                                margin = otherTotal -
+                                                                    dataBaseProvider
+                                                                        .selectedCommodities
+                                                                        .value
+                                                                        .fold(
+                                                                            0.0,
+                                                                            (previousValue, element) =>
+                                                                                previousValue +
+                                                                                (element.cost * element.quantity!.value));
+                                                              }
+                                                              return Text(
+                                                                _selectedOption ==
+                                                                        'Alquiler'
+                                                                    ? "$alquilerTotal"
+                                                                    : "$otherTotal",
+                                                                style:
+                                                                    const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 18,
+                                                                ),
+                                                              );
+                                                            },
+                                                          );
+                                                        },
                                                       );
                                                     },
-                                                  );
-                                                },
-                                              );
-                                            },
-                                          )
-                                        ],
-                                      ),
-                                    ),
-                            ),
-                            const Text('Comentario',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
-                            Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
-                              height: size(context).height * 0.111,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    spreadRadius: 2,
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: TextFormField(
-                                controller: _commnetController,
-                                keyboardType: TextInputType.multiline,
-                                maxLines: null,
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  hintText: 'Escribe tu comentario aquí...',
+                                                  )
+                                                ],
+                                              ),
+                                            ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            const Text('Pago',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
-                            Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    spreadRadius: 2,
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  ...pagos.map((pago) {
-                                    return ListTile(
-                                      title: Text(
-                                          'Pago: ${pago.amount}, Fecha: ${pago.date}'),
-                                    );
-                                  }),
-                                  TextFormField(
-                                    controller: _paymentDateController,
-                                    onTap: () {
-                                      _selectDate(
-                                          context, _paymentDateController);
-                                    },
-                                    readOnly: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Fecha del pago',
-                                    ),
-                                  ),
-                                  TextFormField(
-                                    controller: _paymentAmountController,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Monto del pago',
-                                    ),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: _addPago,
-                                    child: const Text('Agregar Pago'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            const SizedBox(height: 20),
-                            const Text('Total Adeudado',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15)),
-                            Container(
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.2),
-                                    spreadRadius: 2,
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: selectedProducts.isEmpty &&
-                                      productDateRanges.values.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                        "Por favor, escoga al menos un producto",
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15),
+                                const Text('Comentario',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                                  height: size(context).height * 0.111,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.2),
+                                        spreadRadius: 2,
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
                                       ),
-                                    )
-                                  : Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 10),
-                                      width: double.infinity,
-                                      child: FutureBuilder<double>(
-                                        future: calculateTotalRentalPrice(
-                                            dataBaseProvider,
-                                            productDateRanges),
-                                        builder: (BuildContext context,
-                                            AsyncSnapshot<double> snapshot) {
-                                          if (snapshot.connectionState ==
-                                              ConnectionState.waiting) {
-                                            return const CircularProgressIndicator(); // Show a loading indicator while waiting
-                                          } else if (snapshot.hasError) {
-                                            return Text(
-                                                'Error: ${snapshot.error}');
-                                          } else {
-                                            final totalRentalPrice =
-                                                snapshot.data ?? 0.0;
-                                            return ValueListenableBuilder<
-                                                double>(
-                                              valueListenable: dataBaseProvider
-                                                  .totalPriceNotifier,
-                                              builder:
-                                                  (context, quantity, child) {
-                                                return ValueListenableBuilder(
+                                    ],
+                                  ),
+                                  child: TextFormField(
+                                    controller: _commnetController,
+                                    keyboardType: TextInputType.multiline,
+                                    maxLines: null,
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      hintText: 'Escribe tu comentario aquí...',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                const Text('Pago',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.2),
+                                        spreadRadius: 2,
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      ...pagos.map((pago) {
+                                        return ListTile(
+                                          title: Text(
+                                              'Pago: ${pago.amount}, Fecha: ${pago.date}'),
+                                        );
+                                      }),
+                                      TextFormField(
+                                        controller: _paymentDateController,
+                                        onTap: () {
+                                          _selectDate(
+                                              context, _paymentDateController);
+                                        },
+                                        readOnly: true,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Fecha del pago',
+                                        ),
+                                      ),
+                                      TextFormField(
+                                        controller: _paymentAmountController,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Monto del pago',
+                                        ),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: _addPago,
+                                        child: const Text('Agregar Pago'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                const SizedBox(height: 20),
+                                const Text('Total Adeudado',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
+                                Container(
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.2),
+                                        spreadRadius: 2,
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: selectedProducts.isEmpty &&
+                                          productDateRanges.values.isEmpty
+                                      ? const Center(
+                                          child: Text(
+                                            "Por favor, escoga al menos un producto",
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15),
+                                          ),
+                                        )
+                                      : Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 10),
+                                          width: double.infinity,
+                                          child: FutureBuilder<double>(
+                                            future: calculateTotalRentalPrice(
+                                                dataBaseProvider,
+                                                productDateRanges),
+                                            builder: (BuildContext context,
+                                                AsyncSnapshot<double>
+                                                    snapshot) {
+                                              if (snapshot.connectionState ==
+                                                  ConnectionState.waiting) {
+                                                return const CircularProgressIndicator(); // Show a loading indicator while waiting
+                                              } else if (snapshot.hasError) {
+                                                return Text(
+                                                    'Error: ${snapshot.error}');
+                                              } else {
+                                                final totalRentalPrice =
+                                                    snapshot.data ?? 0.0;
+                                                return ValueListenableBuilder<
+                                                    double>(
                                                   valueListenable:
                                                       dataBaseProvider
-                                                          .selectedCommodities,
-                                                  builder: (context,
-                                                      selectedCommodities,
+                                                          .totalPriceNotifier,
+                                                  builder: (context, quantity,
                                                       child) {
-                                                    final earningsCommodities =
-                                                        selectedCommodities
-                                                            .fold(0.0,
-                                                                (sum, product) {
-                                                      return sum +
-                                                          (product.unitPrice *
-                                                              product.quantity!
-                                                                  .value);
-                                                    });
-                                                    final totalOwnedOrder =
-                                                        productDateRanges
-                                                                .isNotEmpty
-                                                            ? (quantity -
-                                                                    grantTotalOwned +
-                                                                    earningsCommodities)
-                                                                .toStringAsFixed(
-                                                                    2)
-                                                            : totalOwned
-                                                                .toString();
+                                                    return ValueListenableBuilder(
+                                                      valueListenable:
+                                                          dataBaseProvider
+                                                              .selectedCommodities,
+                                                      builder: (context,
+                                                          selectedCommodities,
+                                                          child) {
+                                                        final earningsCommodities =
+                                                            selectedCommodities
+                                                                .fold(0.0, (sum,
+                                                                    product) {
+                                                          return sum +
+                                                              (product.unitPrice *
+                                                                  product
+                                                                      .quantity!
+                                                                      .value);
+                                                        });
+                                                        final totalOwnedOrder =
+                                                            productDateRanges
+                                                                    .isNotEmpty
+                                                                ? (quantity -
+                                                                        grantTotalOwned +
+                                                                        earningsCommodities)
+                                                                    .toStringAsFixed(
+                                                                        2)
+                                                                : "${totalOwned + earningsCommodities}";
 
-                                                    totalOwnedGlobal =
-                                                        totalOwnedOrder;
-                                                    return Text(
-                                                      totalOwnedOrder,
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 18,
-                                                      ),
+                                                        totalOwnedGlobal =
+                                                            totalOwnedOrder;
+                                                        totalOwned = double.parse(
+                                                                totalOwnedOrder)
+                                                            .toInt();
+                                                        return Text(
+                                                          totalOwnedOrder,
+                                                          style:
+                                                              const TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 18,
+                                                          ),
+                                                        );
+                                                      },
                                                     );
                                                   },
                                                 );
-                                              },
-                                            );
-                                          }
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                ),
+                                const SizedBox(height: 20),
+                                Container(
+                                  margin: const EdgeInsets.all(20),
+                                  width: double.infinity,
+                                  height: 70,
+                                  child: ValueListenableBuilder(
+                                    valueListenable: isCheckoutButtonEnabled,
+                                    builder: (context, value, child) {
+                                      return ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color.fromARGB(
+                                              255, 108, 40, 123),
+                                          textStyle:
+                                              const TextStyle(fontSize: 20),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        onPressed: () {
+                                          _onCreateOrder();
                                         },
-                                      ),
-                                    ),
-                            ),
-                            const SizedBox(height: 20),
-                            Container(
-                              margin: const EdgeInsets.all(20),
-                              width: double.infinity,
-                              height: 70,
-                              child: ValueListenableBuilder(
-                                valueListenable: isCheckoutButtonEnabled,
-                                builder: (context, value, child) {
-                                  return ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color.fromARGB(
-                                          255, 108, 40, 123),
-                                      textStyle: const TextStyle(fontSize: 20),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                    onPressed: () {
-                                      _onCreateOrder();
+                                        child: const Text(
+                                          "Continuar",
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      );
                                     },
-                                    child: const Text(
-                                      "Continuar",
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         );
                       },
                     ),
@@ -1801,13 +2051,14 @@ class WidgetSelector extends StatelessWidget {
   final bool onOptionSelected;
   final Function(String) onSelected;
   final Function onSetState;
+  final String optionSelectedVenta;
 
-  const WidgetSelector({
-    super.key,
-    required this.onOptionSelected,
-    required this.onSelected,
-    required this.onSetState,
-  });
+  const WidgetSelector(
+      {super.key,
+      required this.onOptionSelected,
+      required this.onSelected,
+      required this.onSetState,
+      required this.optionSelectedVenta});
 
   @override
   Widget build(BuildContext context) {
@@ -1817,15 +2068,16 @@ class WidgetSelector extends StatelessWidget {
         ElevatedButton(
           onPressed: () {
             onSelected('Venta');
-            !onOptionSelected
-                ? Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ChoseProductOrdenScreen()))
-                    .then((value) {
-                    onSetState();
-                  })
-                : null;
+            onSetState();
+            if (optionSelectedVenta == "Venta") {
+              Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const ChoseProductOrdenScreen()))
+                  .then((value) {
+                onSetState();
+              });
+            }
           },
           child: const Text('Venta'),
         ),
@@ -1906,6 +2158,7 @@ class _VentaWidgetState extends State<VentaWidget> {
                     return SizedBox(
                       height: 400,
                       child: ListView.builder(
+                        physics: const NeverScrollableScrollPhysics(),
                         itemCount: filteredProducts.length,
                         itemBuilder: (context, index) {
                           final product = filteredProducts[index];

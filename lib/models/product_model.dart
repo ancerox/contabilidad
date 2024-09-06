@@ -15,9 +15,11 @@ class ProductModel extends Equatable {
   final String unit;
   final String productType;
   ValueNotifier<int>? quantity;
-  final List<ProductModel>? subProduct;
+  List<ProductModel>? subProduct;
   List<DateRange>? datesNotAvailable;
   List<DateRange>? datesUsed;
+  bool
+      costModified; // Nueva propiedad para rastrear si el costo fue modificado manualmente
 
   ProductModel({
     this.id,
@@ -33,6 +35,7 @@ class ProductModel extends Equatable {
     this.subProduct,
     this.datesNotAvailable,
     this.datesUsed,
+    this.costModified = false, // Valor predeterminado a `false`
   });
 
   ProductModel copyWith({
@@ -49,6 +52,7 @@ class ProductModel extends Equatable {
     List<ProductModel>? subProduct,
     List<DateRange>? datesNotAvailable,
     List<DateRange>? datesUsed,
+    bool? costModified, // Añadir al copyWith
   }) {
     return ProductModel(
       id: id ?? this.id,
@@ -64,6 +68,7 @@ class ProductModel extends Equatable {
       subProduct: subProduct ?? this.subProduct,
       datesNotAvailable: datesNotAvailable ?? this.datesNotAvailable,
       datesUsed: datesUsed ?? this.datesUsed,
+      costModified: costModified ?? this.costModified, // Aplicar el cambio aquí
     );
   }
 
@@ -82,12 +87,13 @@ class ProductModel extends Equatable {
         subProduct,
         datesNotAvailable,
         datesUsed,
+        costModified, // Añadir a la lista de propiedades
       ];
 
   @override
   bool get stringify => true;
 
-  // Converts the object to a Map
+  // Convierte el objeto a un Map
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -110,10 +116,11 @@ class ProductModel extends Equatable {
       'datesUsed': datesUsed != null
           ? jsonEncode(datesUsed!.map((range) => range.toMap()).toList())
           : null,
+      'costModified': costModified ? 1 : 0, // Convertir a entero para SQLite
     };
   }
 
-  // Creates a ProductModel instance from a Map
+  // Crea una instancia de ProductModel desde un Map
   static ProductModel fromMap(Map<String, dynamic> map) {
     return ProductModel(
       id: map['id'],
@@ -122,7 +129,9 @@ class ProductModel extends Equatable {
       amount: map['amount'],
       unitPrice: map['unitPrice'],
       productCategory: map['productCategory'],
-      cost: (map['cost'] as double).toInt(),
+      cost: (map['cost'] is double)
+          ? (map['cost'] as double).toInt()
+          : map['cost'] as int,
       unit: map['unit'],
       productType: map['productType'],
       quantity: ValueNotifier<int>(map['quantity'] ?? 0),
@@ -140,6 +149,8 @@ class ProductModel extends Equatable {
           ? List<DateRange>.from(jsonDecode(map['datesUsed'])
               .map((range) => DateRange.fromMap(range)))
           : null,
+      costModified:
+          (map['costModified'] == 1) ? true : false, // Convertir de int a bool
     );
   }
 }

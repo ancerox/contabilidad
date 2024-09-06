@@ -57,6 +57,7 @@ class _ProductTileState extends State<ProductTile> {
   void dispose() {
     _controller.dispose();
     _quantityNotifier.dispose();
+
     super.dispose();
   }
 
@@ -95,6 +96,7 @@ class _ProductTileState extends State<ProductTile> {
   }
 
   void _onQuantityChanged(String value) {
+    print("TEST43434");
     int? newQuantity = int.tryParse(value);
     if (newQuantity != null) {
       if (isStockAvailableForNewOrder(widget.productModel, widget.dateSelected,

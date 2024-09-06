@@ -21,19 +21,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ValueNotifier<String>(''); // Para el filtro seleccionado
 
   final Map<String, TextEditingController> _quantityControllers = {};
+  final Map<String, TextEditingController> _costCTRController = {};
   final Map<String, ValueNotifier<int>> productQuantities = {};
   final Map<String, ValueNotifier<int>> productCosts = {};
   ValueNotifier<bool> isCheckoutButtonEnabled = ValueNotifier(false);
   List<ProductModel> selectedProducts = [];
   List<ProductModel> allProducts = []; // Lista completa de productos
   List<ProductModel> filteredProducts = []; // Lista filtrada de productos
+  bool isFilterEmpty = false;
 
   @override
   void initState() {
     super.initState();
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
     getProducts();
-    _searchController.addListener(_filterProducts);
+    // _searchController.addListener(_filterProducts);
     selectedItemNotifier.addListener(
         _filterProducts); // Escuchar cambios en el filtro seleccionado
   }
@@ -43,6 +45,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     String selectedFilter = selectedItemNotifier.value;
 
     setState(() {
+      // Cambiar `filteredProducts` a `allProducts`
       filteredProducts = allProducts.where((product) {
         final matchesSearchQuery = product.name.toLowerCase().contains(query);
         final matchesSelectedFilter =
@@ -75,10 +78,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     for (var product in products) {
+      print("${product.cost} testtt");
       final productId = product.id.toString();
+
       productQuantities[productId] = ValueNotifier<int>(0);
       productCosts[productId] = ValueNotifier<int>(product.cost.toInt());
       _quantityControllers[productId] = TextEditingController();
+      _costCTRController[productId] = TextEditingController();
     }
 
     setState(() {
@@ -133,6 +139,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final double screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text("Escoge un producto"),
       ),
@@ -160,7 +167,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       GestureDetector(
                         onTap: () {
                           selectedItemNotifier.value = option;
-                          _filterProducts(); // Actualizar la lista filtrada
+                          _filterProducts();
+
+                          // _filterProducts(); // /Actualizar la lista filtrada
                         },
                         child: ValueListenableBuilder<String>(
                           valueListenable: selectedItemNotifier,
@@ -213,117 +222,91 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
             Expanded(
-              child: filteredProducts.isEmpty
-                  ? Container(
-                      padding: const EdgeInsets.all(16.0),
-                      margin: const EdgeInsets.all(16.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20.0),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.5),
-                            spreadRadius: 1,
-                            blurRadius: 5,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
+              child: ListView.builder(
+                itemCount: filteredProducts.length,
+                itemBuilder: (context, index) {
+                  final product = filteredProducts[index];
+                  final productId = product.id.toString();
+
+                  if (!productQuantities.containsKey(productId)) {
+                    productQuantities[productId] = ValueNotifier<int>(0);
+                  }
+                  if (!productCosts.containsKey(productId)) {
+                    productCosts[productId] =
+                        ValueNotifier<int>(product.cost.toInt());
+                  }
+
+                  final quantityController = _quantityControllers[productId] ??
+                      TextEditingController();
+                  final costCTRController =
+                      _costCTRController[productId] ?? TextEditingController();
+
+                  costCTRController.text = product.cost.toString();
+                  print("${product.cost} test123123");
+                  quantityController.text =
+                      productQuantities[productId]!.value.toString();
+
+                  return GestureDetector(
+                    onTap: () async {
+                      // Handle tap
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: productCosts[productId]!,
+                        builder: (context, costValue, child) {
+                          return Item(
+                            costOnChange: (String value) {
+                              if (value.isNotEmpty) {
+                                productCosts[productId]!.value =
+                                    int.parse(value);
+
+                                //
+                                product.cost = productCosts[productId]!.value;
+                              }
+                            },
+                            quantityOnChange: (String value) {
+                              if (value == "") {
+                                return;
+                              }
+                              productQuantities[productId]!.value =
+                                  int.parse(value);
+                              _updateCheckoutButtonState();
+
+                              _updateSelectedProductQuantity(product,
+                                  int.parse(quantityController.text), true);
+                            },
+                            quantityCTRController: quantityController,
+                            costCTRController: costCTRController,
+                            cost: productCosts[productId]!.value.toInt(),
+                            quantity: productQuantities[productId]!,
+                            minus: () {
+                              if (productQuantities[productId]!.value == 0) {
+                                return;
+                              }
+                              productQuantities[productId]!.value--;
+                              _updateCheckoutButtonState();
+                              _updateSelectedProductQuantity(
+                                  product, -1, false);
+                            },
+                            plus: () {
+                              productQuantities[productId]!.value++;
+                              _updateCheckoutButtonState();
+                              _updateSelectedProductQuantity(product, 1, false);
+                            },
+                            hasTrailing: true,
+                            magnitud: product.unit,
+                            amount: product.amount,
+                            name: product.name,
+                            precio: product.unitPrice,
+                            imagePath: product.file!,
+                          );
+                        },
                       ),
-                      child: const Text(
-                        "No se encontraron productos que coincidan con la búsqueda",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16.0,
-                          color: Colors.black,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = filteredProducts[index];
-                        final productId = product.id.toString();
-
-                        if (!productQuantities.containsKey(productId)) {
-                          productQuantities[productId] = ValueNotifier<int>(0);
-                        }
-                        if (!productCosts.containsKey(productId)) {
-                          productCosts[productId] =
-                              ValueNotifier<int>(product.cost.toInt());
-                        }
-
-                        final quantityController =
-                            _quantityControllers[productId] ??
-                                TextEditingController();
-
-                        quantityController.text =
-                            productQuantities[productId]!.value.toString();
-
-                        return GestureDetector(
-                          onTap: () async {
-                            // Handle tap
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            child: ValueListenableBuilder<int>(
-                              valueListenable: productCosts[productId]!,
-                              builder: (context, costValue, child) {
-                                return Item(
-                                  costOnChange: (String value) {
-                                    if (value.isNotEmpty) {
-                                      productCosts[productId]!.value =
-                                          int.parse(value);
-                                      product.cost =
-                                          productCosts[productId]!.value;
-                                    }
-                                  },
-                                  quantityOnChange: (String value) {
-                                    if (value == "") {
-                                      return;
-                                    }
-                                    productQuantities[productId]!.value =
-                                        int.parse(value);
-                                    _updateCheckoutButtonState();
-
-                                    _updateSelectedProductQuantity(
-                                        product,
-                                        int.parse(quantityController.text),
-                                        true);
-                                  },
-                                  quantityCTRController: quantityController,
-                                  costCTRController: TextEditingController(
-                                      text: costValue.toString()),
-                                  cost: productCosts[productId]!.value.toInt(),
-                                  quantity: productQuantities[productId]!,
-                                  minus: () {
-                                    if (productQuantities[productId]!.value ==
-                                        0) {
-                                      return;
-                                    }
-                                    productQuantities[productId]!.value--;
-                                    _updateCheckoutButtonState();
-                                    _updateSelectedProductQuantity(
-                                        product, -1, false);
-                                  },
-                                  plus: () {
-                                    productQuantities[productId]!.value++;
-                                    _updateCheckoutButtonState();
-                                    _updateSelectedProductQuantity(
-                                        product, 1, false);
-                                  },
-                                  hasTrailing: true,
-                                  magnitud: product.unit,
-                                  amount: product.amount,
-                                  name: product.name,
-                                  precio: product.unitPrice,
-                                  imagePath: product.file!,
-                                );
-                              },
-                            ),
-                          ),
-                        );
-                      },
                     ),
+                  );
+                },
+              ),
             ),
             Container(
               margin: const EdgeInsets.all(16),

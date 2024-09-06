@@ -23,33 +23,20 @@ class CreateProductPage extends StatefulWidget {
 }
 
 final List<String> _units = [
-  // Longitud
-  'Milímetros (mm)',
-  'Centímetros (cm)',
+  'Unidad (und)',
   'Metros (m)',
-  'Kilómetros (km)',
   'Pulgadas (in)',
   'Pies (ft)',
   'Yardas (yd)',
-  'Millas (mi)',
-  // Masa
-  'Miligramos (mg)',
-  'Gramos (g)',
   'Kilogramos (kg)',
-  'Toneladas (t)',
-  'Libras (lb)',
+  'Gramos (g)',
   'Onzas (oz)',
-  // Volumen
-  'Mililitros (ml)',
+  'Libras (lb)',
+  'Pulgadas cuadradas (in²)',
+  'Pies cuadrados (ft²)',
+  'Onzas fluidas (fl oz)',
   'Litros (l)',
-  'Metros cúbicos (m³)',
-  'Teaspoons (tsp)',
-  'Tablespoons (tbsp)',
-  'Cups (cup)',
-  'Pintas (pt)',
   'Galones (gal)',
-  // Y más según necesites...
-  "Unidad"
 ];
 
 class _CreateProductPageState extends State<CreateProductPage> {
@@ -144,6 +131,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
       final product = ProductModel(
+          costModified: widget.product?.costModified ?? false,
           id: widget.product?.id, // Make sure to handle the ID appropriately
           name: _nameController.text,
           cost: _costController.text.isEmpty
@@ -193,14 +181,16 @@ class _CreateProductPageState extends State<CreateProductPage> {
 
   @override
   Widget build(BuildContext context) {
-    // if (databaseProvider.selectedCommodities.value.isNotEmpty) {
-    //   int totalCost = databaseProvider.selectedCommodities.value.fold(
-    //       0,
-    //       (int sum, ProductModel product) =>
-    //           sum + product.cost.toInt() * product.quantity!.value);
+    if (databaseProvider.selectedCommodities.value.isNotEmpty) {
+      if (widget.product == null || widget.product!.costModified == false) {
+        int totalCost = databaseProvider.selectedCommodities.value.fold(
+            0,
+            (int sum, ProductModel product) =>
+                sum + product.cost.toInt() * product.quantity!.value);
 
-    //   _costController.text = totalCost.toString();
-    // }
+        _costController.text = totalCost.toString();
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -213,8 +203,8 @@ class _CreateProductPageState extends State<CreateProductPage> {
           child: Column(
             children: <Widget>[
               Container(
-                height: 150,
-                width: double.infinity,
+                height: 200,
+                width: 200,
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(12),

@@ -219,6 +219,7 @@ class _EditOrderScreenState extends State<EditOrderScreen>
   void _saveOrder() async {
     // Save the edited order
     OrderModel updatedOrder = OrderModel(
+      orderId: "ORDEN",
       pagos: [],
       id: widget.order.id,
       orderNumber: orderNumberController.text,

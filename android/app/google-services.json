@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "394371494743",
+    "project_id": "contabilidad-9a8e6",
+    "storage_bucket": "contabilidad-9a8e6.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:394371494743:android:c1a08932e696b257364412",
+        "android_client_info": {
+          "package_name": "asdgdffds2dasdasd.asdsa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArf6ngDV5nYdpkr-3fjYoRHmQ2wvcUDRY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:394371494743:android:bb51d384252635e6364412",
+        "android_client_info": {
+          "package_name": "com.example.contabilidad"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArf6ngDV5nYdpkr-3fjYoRHmQ2wvcUDRY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

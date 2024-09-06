@@ -4,31 +4,51 @@ import 'package:contabilidad/models/date_range.dart';
 import 'package:contabilidad/models/product_model.dart';
 
 class PagoModel {
+  final String? id;
   final String date;
   final double amount;
 
-  PagoModel({required this.date, required this.amount});
+  PagoModel({required this.date, required this.amount, this.id});
 
   factory PagoModel.fromMap(Map<String, dynamic> map) {
     return PagoModel(
       date: map['date'],
       amount: map['amount'].toDouble(),
+      id: map['id'],
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'date': date,
       'amount': amount,
     };
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! PagoModel) return false;
+    return other.id == id && other.date == date && other.amount == amount;
+  }
+
+  @override
+  int get hashCode => Object.hash(id, date, amount);
+
+  @override
+  String toString() {
+    return 'PagoModel(id: $id, date: $date, amount: $amount)';
+  }
 }
 
 class OrderModel {
+  int? totalCostSpent;
   final String? orderNumber;
   final String totalOwned;
   final String margen;
   int? id;
+  String orderId;
   final String clientName;
   final String celNumber;
   final String direccion;
@@ -36,12 +56,14 @@ class OrderModel {
   final List<ProductModel>? adminExpenses;
   final String date;
   final String comment;
-  final double totalCost;
-  final String status;
-  final List<PagoModel> pagos;
+  double totalCost;
+  String status;
+  List<PagoModel> pagos;
   Map<int, List<DateRange>>? datesInUse;
 
   OrderModel({
+    this.totalCostSpent,
+    required this.orderId,
     required this.pagos,
     this.id,
     this.orderNumber,
@@ -113,6 +135,7 @@ class OrderModel {
     }
 
     return OrderModel(
+      orderId: map['orderId'],
       pagos: pagosList,
       orderNumber: map['orderNumber'],
       totalOwned: map['totalOwned'],
@@ -127,6 +150,7 @@ class OrderModel {
       date: map['date'],
       comment: map['comment'],
       totalCost: map['totalCost'].toDouble(),
+      totalCostSpent: map['totalCostSpent'],
       datesInUse: datesInUse,
     );
   }
@@ -138,6 +162,7 @@ class OrderModel {
       'totalOwned': totalOwned,
       'margen': margen,
       'id': id,
+      'orderId': orderId,
       'status': status,
       'clientName': clientName,
       'celNumber': celNumber,
@@ -145,6 +170,7 @@ class OrderModel {
       'date': date,
       'comment': comment,
       'totalCost': totalCost,
+      'totalCostSpent': totalCostSpent,
       'productList': productList != null
           ? json.encode(productList!.map((product) => product.toMap()).toList())
           : null,
@@ -162,6 +188,7 @@ class OrderModel {
   }
 
   OrderModel copyWith({
+    String? orderId,
     String? orderNumber,
     String? totalOwned,
     String? margen,
@@ -179,6 +206,7 @@ class OrderModel {
     Map<int, List<DateRange>>? datesInUse,
   }) {
     return OrderModel(
+      orderId: orderId ?? this.orderId,
       adminExpenses: adminExpenses ?? this.adminExpenses,
       orderNumber: orderNumber ?? this.orderNumber,
       totalOwned: totalOwned ?? this.totalOwned,
@@ -191,6 +219,7 @@ class OrderModel {
       date: date ?? this.date,
       comment: comment ?? this.comment,
       totalCost: totalCost ?? this.totalCost,
+      totalCostSpent: totalCostSpent ?? totalCostSpent,
       status: status ?? this.status,
       pagos: pagos ?? this.pagos,
       datesInUse: datesInUse ?? this.datesInUse,

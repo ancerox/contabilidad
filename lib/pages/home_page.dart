@@ -1,17 +1,24 @@
 import 'package:contabilidad/consts.dart';
+import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/pages/buy_screen.dart';
 import 'package:contabilidad/pages/create_charge_screen.dart';
 import 'package:contabilidad/pages/create_order.dart';
 import 'package:contabilidad/pages/history.dart';
-import 'package:contabilidad/pages/pending_screen.dart';
 import 'package:contabilidad/pages/save_data_page.dart';
 import 'package:contabilidad/pages/stock_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-class HomePage extends StatelessWidget {
-  HomePage({super.key});
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
   final listOfActionsSVGs = [
     'assets/icons/compra.svg',
     'assets/icons/ordenes.svg',
@@ -19,6 +26,13 @@ class HomePage extends StatelessWidget {
   ];
   final listOfActionsTexts = ['Compra', 'Orden', 'Cobro'];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  DateTimeRange? selectedDateRange;
+  @override
+  void initState() {
+    // TODO: implement initState
+    didChangeDependencies();
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +46,7 @@ class HomePage extends StatelessWidget {
                 color: Colors.blue,
               ),
               child: Text(
-                'Configuracion',
+                'Configuración',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 24,
@@ -54,182 +68,372 @@ class HomePage extends StatelessWidget {
       ),
       key: _scaffoldKey,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            double screenWidth = MediaQuery.of(context).size.width;
-            double cardWidth = (screenWidth - 40) / 2;
+        child: SingleChildScrollView(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              double screenWidth = MediaQuery.of(context).size.width;
+              double cardWidth = (screenWidth - 40) / 2;
 
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 30),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        _scaffoldKey.currentState?.openDrawer();
-                      },
-                      child: SvgPicture.asset('assets/icons/ep_menu.svg'),
-                    ),
-                    const SizedBox(height: 40),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Column(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const HistoryScreen(),
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 30),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          _scaffoldKey.currentState?.openDrawer();
+                        },
+                        child: SvgPicture.asset('assets/icons/ep_menu.svg'),
+                      ),
+                      const SizedBox(height: 40),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Column(
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const HistoryScreen(),
+                                    ),
+                                  );
+                                },
+                                child: CardWidget(
+                                  isFull: false,
+                                  icon: 'assets/icons/ventas.svg',
+                                  count: 2,
+                                  title: "Historial de ventas",
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.topRight,
+                                    colors: [
+                                      Color(0xff5100FF),
+                                      Color(0xff9F72FF),
+                                    ],
                                   ),
-                                );
-                              },
-                              child: CardWidget(
-                                isFull: false,
-                                icon: 'assets/icons/ventas.svg',
-                                count: 2,
-                                title: "Historial de ventas",
-                                gradient: const LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.topRight,
-                                  colors: [
-                                    Color(0xff5100FF),
-                                    Color(0xff9F72FF),
-                                  ],
+                                  width: cardWidth,
                                 ),
-                                width: cardWidth,
                               ),
+                              const SizedBox(height: 10),
+                              // GestureDetector(
+                              //   onTap: () {
+                              //     Navigator.push(
+                              //       context,
+                              //       MaterialPageRoute(
+                              //         builder: (context) =>
+                              //             const PendingScreen(),
+                              //       ),
+                              //     );
+                              //   },
+                              //   child: CardWidget(
+                              //     isFull: false,
+                              //     icon: 'assets/icons/pendientes.svg',
+                              //     count: 2,
+                              //     title: "Órdenes pendientes",
+                              //     gradient: const LinearGradient(
+                              //       begin: Alignment.centerLeft,
+                              //       end: Alignment.topRight,
+                              //       colors: [
+                              //         Color(0xffF32FDF),
+                              //         Color(0xffF32FDF),
+                              //       ],
+                              //     ),
+                              //     width: cardWidth,
+                              //   ),
+                              // ),
+                            ],
+                          ),
+                          const SizedBox(width: 10),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const StockScreen(),
+                                ),
+                              );
+                            },
+                            child: CardWidget(
+                              isFull: true,
+                              icon: 'assets/icons/inventario.svg',
+                              count: 2,
+                              title: "Manejo inventario",
+                              gradient: const LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.topRight,
+                                colors: [
+                                  Color(0xff04AFD3),
+                                  Color(0xff04AFD3),
+                                ],
+                              ),
+                              width: screenWidth - cardWidth - 30,
                             ),
-                            const SizedBox(height: 10),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const PendingScreen(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
+                      Text(
+                        'Acciones rápidas',
+                        style: subtitles.copyWith(color: Colors.black),
+                      ),
+                      const SizedBox(height: 15),
+                      SizedBox(
+                        height: 130,
+                        child: Center(
+                          child: ListView.builder(
+                            itemCount: 3,
+                            scrollDirection: Axis.horizontal,
+                            itemBuilder: (context, index) {
+                              return GestureDetector(
+                                onTap: () {
+                                  quickActionsChoose(context, index);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20),
+                                  child: QuickActions(
+                                    icon: listOfActionsSVGs[index],
+                                    subtitle: listOfActionsTexts[index],
                                   ),
-                                );
-                              },
-                              child: CardWidget(
-                                isFull: false,
-                                icon: 'assets/icons/pendientes.svg',
-                                count: 2,
-                                title: "Ordernes pendientes",
-                                gradient: const LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.topRight,
-                                  colors: [
-                                    Color(0xffF32FDF),
-                                    Color(0xffF32FDF),
-                                  ],
                                 ),
-                                width: cardWidth,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 10),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const StockScreen(),
-                              ),
-                            );
-                          },
-                          child: CardWidget(
-                            isFull: true,
-                            icon: 'assets/icons/inventario.svg',
-                            count: 2,
-                            title: "Manejo inventario",
-                            gradient: const LinearGradient(
-                              begin: Alignment.centerLeft,
-                              end: Alignment.topRight,
-                              colors: [
-                                Color(0xff04AFD3),
-                                Color(0xff04AFD3),
-                              ],
-                            ),
-                            width: screenWidth - cardWidth - 30,
+                              );
+                            },
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                    Text(
-                      'Acciones rápidas',
-                      style: subtitles.copyWith(color: Colors.black),
-                    ),
-                    const SizedBox(height: 15),
-                    SizedBox(
-                      height: 130,
-                      child: ListView.builder(
-                        itemCount: 3,
-                        scrollDirection: Axis.horizontal,
-                        itemBuilder: (context, index) {
-                          return GestureDetector(
-                            onTap: () {
-                              quickActionsChoose(context, index);
-                            },
-                            child: Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
-                              child: QuickActions(
-                                icon: listOfActionsSVGs[index],
-                                subtitle: listOfActionsTexts[index],
-                              ),
-                            ),
+                      ),
+                      const SizedBox(height: 15),
+                      Text(
+                        'Estadísticas',
+                        style: subtitles.copyWith(color: Colors.black),
+                      ),
+                      const SizedBox(height: 15),
+                      TextButton(
+                        onPressed: () async {
+                          final pickedDateRange = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
                           );
+                          if (pickedDateRange != null) {
+                            setState(() {
+                              selectedDateRange = pickedDateRange;
+                            });
+                          }
+                        },
+                        child: Text(
+                          selectedDateRange == null
+                              ? 'Seleccionar intervalo de fechas'
+                              : '${DateFormat('dd/MM/yyyy').format(selectedDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(selectedDateRange!.end)}',
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      FutureBuilder<Map<String, double>>(
+                        future: _calcularTotales(context),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const CircularProgressIndicator();
+                          } else if (snapshot.hasError) {
+                            return const Text('Error al calcular los totales.');
+                          } else {
+                            final totals = snapshot.data ??
+                                {
+                                  'ventas': 0.0,
+                                  'costo': 0.0,
+                                  'ganancias': 0.0,
+                                };
+                            final totalVentas = totals['ventas']!;
+                            final totalCosto = totals['costo']!;
+                            final totalGanancias = totals['ganancias']!;
+                            final puntoDeEquilibrio =
+                                totals['puntoEquilibrio']!;
+
+                            return Column(
+                              children: [
+                                Center(
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            Statistics(
+                                              color: 0xff9C4CFD,
+                                              text:
+                                                  'Ingresos \n\$${totalVentas.toStringAsFixed(2)}',
+                                              percentage: totalVentas > 0
+                                                  ? (totalVentas / 1000)
+                                                      .clamp(0.0, 1.0)
+                                                  : 0.0,
+                                            ),
+                                            Statistics(
+                                              color: 0xff0EB200,
+                                              text:
+                                                  'Ganancias \n\$${totalGanancias.toStringAsFixed(2)}',
+                                              percentage: totalGanancias > 0
+                                                  ? (totalGanancias / 500)
+                                                      .clamp(0.0, 1.0)
+                                                  : 0.0,
+                                            ),
+                                            Statistics(
+                                              color: 0xffF85819,
+                                              text:
+                                                  'Gastos \n\$${totalCosto.toStringAsFixed(2)}',
+                                              percentage: totalCosto > 0
+                                                  ? (totalCosto / 800)
+                                                      .clamp(0.0, 1.0)
+                                                  : 0.0,
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(
+                                          height: 20,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Punto de equilibrio',
+                                        style: subtitles.copyWith(
+                                            color: Colors.black),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      LinearProgressIndicator(
+                                        value: puntoDeEquilibrio.clamp(0.0,
+                                            1.0), // Ajusta el valor entre 0 y 1
+                                        backgroundColor: Colors.grey[300],
+                                        color: Colors
+                                            .blue, // Cambia el color según tu preferencia
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        '${(puntoDeEquilibrio * 100).toStringAsFixed(2)}%',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              ],
+                            );
+                          }
                         },
                       ),
-                    ),
-                    const SizedBox(height: 15),
-                    Text(
-                      'Estadísticas',
-                      style: subtitles.copyWith(color: Colors.black),
-                    ),
-                    const SizedBox(height: 15),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Statistics(
-                          color: 0xff9C4CFD,
-                          text: 'Total\ngenerado',
-                        ),
-                        Statistics(
-                          color: 0xff0EB200,
-                          text: "Ganancias",
-                        ),
-                        Statistics(
-                          color: 0xffF85819,
-                          text: "Perdidas",
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
+  Future<Map<String, double>> _calcularTotales(BuildContext context) async {
+    final dataBase = Provider.of<DataBase>(context, listen: false);
+    final orders = await dataBase.getAllOrdersWithProducts();
+
+    double totalVentas = 0.0;
+    double totalCosto = 0.0;
+    double totalGanancias = 0.0;
+
+    if (selectedDateRange != null) {
+      for (var order in orders) {
+        if (order.status == "Pago") {
+          if (order.productList != null && order.productList!.isNotEmpty) {
+            final orderDate = _parseDate(order.date);
+            if (orderDate != null &&
+                orderDate.isAfter(selectedDateRange!.start) &&
+                orderDate.isBefore(selectedDateRange!.end)) {
+              for (var product in order.productList!) {
+                final ventas = product.quantity!.value * product.unitPrice;
+                final costo = product.quantity!.value * product.cost;
+                final ganancia = ventas - costo;
+
+                totalVentas += ventas;
+                totalCosto += costo;
+                totalGanancias += ganancia;
+              }
+            }
+          } else {
+            totalVentas += order.totalCost;
+            totalGanancias += order.totalCost;
+          }
+        }
+      }
+    } else {
+      for (var order in orders) {
+        if (order.status == "Pago") {
+          if (order.productList != null && order.productList!.isNotEmpty) {
+            for (var product in order.productList!) {
+              final ventas = order.totalCost;
+              final costo = product.quantity!.value * product.cost;
+              final ganancia = ventas - costo;
+
+              totalVentas += ventas;
+              totalCosto += costo;
+              totalGanancias += ganancia;
+            }
+          } else {
+            totalVentas += order.totalCost;
+            totalGanancias += order.totalCost;
+          }
+        }
+      }
+    }
+
+    final puntoDeEquilibrio = totalCosto != 0
+        ? totalCosto
+        : 0.0; // Si no hay costo, el punto de equilibrio es 0.
+
+    return {
+      'ventas': totalVentas,
+      'costo': totalCosto,
+      'ganancias': totalGanancias,
+      'puntoEquilibrio': puntoDeEquilibrio,
+    };
+  }
+
+  DateTime? _parseDate(String date) {
+    try {
+      return DateFormat("yyyy-MM-dd HH:mm:ss.SSSSSS").parse(date);
+    } catch (e) {
+      try {
+        return DateFormat("MM/dd/yyyy").parse(date);
+      } catch (e) {
+        print("Error al analizar la fecha: $date - $e");
+        return null;
+      }
+    }
+  }
+
   void quickActionsChoose(context, int index) {
     switch (index) {
       case 0:
-        // Navegar a la primera pantalla (Asumiendo PaymentScreen)
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const PaymentScreen()),
         );
         break;
       case 1:
-        // Navegar a la segunda pantalla (CreateOrder)
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -239,16 +443,12 @@ class HomePage extends StatelessWidget {
         );
         break;
       case 2:
-        // Navegar a la segunda pantalla (CreateOrder)
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const AgregarCobroPage()),
         );
         break;
-      // Agrega más casos si necesitas más pantallas
       default:
-        // Opción por defecto, en caso de que necesites manejar índices fuera del rango esperado
-        // Podrías mostrar un mensaje o navegar a una pantalla de error aquí.
         break;
     }
   }
@@ -257,10 +457,12 @@ class HomePage extends StatelessWidget {
 class Statistics extends StatelessWidget {
   final String text;
   final int color;
+  final double percentage;
 
   const Statistics({
     required this.color,
     required this.text,
+    required this.percentage,
     super.key,
   });
 
@@ -278,15 +480,15 @@ class Statistics extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
           children: [
             Stack(
+              alignment: Alignment.center,
               children: [
                 SizedBox(
                   height: 60,
                   width: 60,
                   child: CircularProgressIndicator(
-                    value: 0.75,
+                    value: percentage,
                     strokeWidth: 6,
                     backgroundColor: Colors.grey[200],
                     valueColor: AlwaysStoppedAnimation<Color>(
@@ -294,22 +496,22 @@ class Statistics extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Positioned(
-                  top: 20,
-                  right: 20,
-                  child: Text(
-                    '00',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
+                Text(
+                  '${(percentage * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w500, fontSize: 20),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            Text(
-              text,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.black,
+            FittedBox(
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
               ),
             ),
           ],
@@ -386,7 +588,7 @@ class CardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: isFull ? 175 : 82,
+      height: 175,
       width: width,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(15),
@@ -396,7 +598,7 @@ class CardWidget extends StatelessWidget {
         children: [
           Positioned(
             left: 18,
-            top: isFull ? 25 : 15,
+            top: 25,
             child: CircleAvatar(
               maxRadius: 16.0,
               backgroundColor: Colors.white,
@@ -407,16 +609,7 @@ class CardWidget extends StatelessWidget {
             ),
           ),
           Positioned(
-            right: isFull ? 0 : 40,
-            left: isFull ? 27 : null,
-            top: isFull ? 65 : 15,
-            child: const Text(
-              '0',
-              style: subtitles,
-            ),
-          ),
-          Positioned(
-            bottom: isFull ? 50 : 10,
+            bottom: 50,
             left: 20,
             child: Text(
               title,

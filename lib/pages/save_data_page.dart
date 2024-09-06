@@ -49,11 +49,12 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _performBackup() async {
-    await Provider.of<DataBase>(context, listen: false).backupDatabase();
-    await _updateLastBackupTime();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('¡Copia de seguridad realizada con éxito!')),
-    );
+    await Provider.of<DataBase>(context, listen: false)
+        .backupDatabase()
+        .then((e) {});
+
+    await _updateLastBackupTime().then((value) {});
+    return;
   }
 
   @override
@@ -65,59 +66,61 @@ class _BackupPageState extends State<BackupPage> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (lastBackupTime != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20.0),
-                child: Text(
-                  'Última copia de seguridad: $lastBackupTime',
-                  style: const TextStyle(
-                    fontSize: 16.0,
-                    color: Colors.grey,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (lastBackupTime != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20.0),
+                  child: Text(
+                    'Última copia de seguridad: $lastBackupTime',
+                    style: const TextStyle(
+                      fontSize: 16.0,
+                      color: Colors.grey,
+                    ),
                   ),
                 ),
-              ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.backup),
-              label: const Text('Realizar copia ahora'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20.0, vertical: 15.0),
-                textStyle: const TextStyle(fontSize: 16.0),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10.0),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.backup),
+                label: const Text('Realizar copia ahora'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20.0, vertical: 15.0),
+                  textStyle: const TextStyle(fontSize: 16.0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
                 ),
+                onPressed: () async {
+                  await _performBackup();
+                },
               ),
-              onPressed: () async {
-                await _performBackup();
-              },
-            ),
-            const SizedBox(height: 20.0),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.file_download),
-              label: const Text('Cargar datos desde JSON'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20.0, vertical: 15.0),
-                textStyle: const TextStyle(fontSize: 16.0),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10.0),
+              const SizedBox(height: 20.0),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.file_download),
+                label: const Text('Cargar datos desde JSON'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20.0, vertical: 15.0),
+                  textStyle: const TextStyle(fontSize: 16.0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
                 ),
+                onPressed: () async {
+                  await Provider.of<DataBase>(context, listen: false)
+                      .loadDataFromJson();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            '¡Datos cargados desde el archivo JSON con éxito!')),
+                  );
+                },
               ),
-              onPressed: () async {
-                await Provider.of<DataBase>(context, listen: false)
-                    .loadDataFromJson();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text(
-                          '¡Datos cargados desde el archivo JSON con éxito!')),
-                );
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
