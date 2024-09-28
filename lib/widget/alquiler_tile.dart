@@ -17,8 +17,8 @@ class ProductTile extends StatefulWidget {
   final ProductModel productModel;
   final String imagePath;
   final String productName;
-  final ValueChanged<int> onQuantityChanged;
-  final int initialQuantity;
+  final ValueChanged<double> onQuantityChanged;
+  final double initialQuantity;
 
   const ProductTile(
       {required this.title,
@@ -48,7 +48,7 @@ class _ProductTileState extends State<ProductTile> {
   void initState() {
     super.initState();
     databaseProvider = Provider.of<DataBase>(context, listen: false);
-    _quantityNotifier.value = widget.initialQuantity;
+    _quantityNotifier.value = widget.initialQuantity.toInt();
     _controller = TextEditingController(
         text: widget.productModel.quantity!.value.toString());
   }
@@ -82,7 +82,7 @@ class _ProductTileState extends State<ProductTile> {
     } else {
       // Check the condition before incrementing
       _quantityNotifier.value++;
-      widget.onQuantityChanged(_quantityNotifier.value);
+      widget.onQuantityChanged(_quantityNotifier.value.toDouble());
       _controller.text = _quantityNotifier.value.toString();
     }
   }
@@ -90,7 +90,7 @@ class _ProductTileState extends State<ProductTile> {
   void _decrementQuantity() {
     if (_quantityNotifier.value > 0) {
       _quantityNotifier.value--;
-      widget.onQuantityChanged(_quantityNotifier.value);
+      widget.onQuantityChanged(_quantityNotifier.value.toDouble());
       _controller.text = _quantityNotifier.value.toString();
     }
   }
@@ -100,9 +100,9 @@ class _ProductTileState extends State<ProductTile> {
     int? newQuantity = int.tryParse(value);
     if (newQuantity != null) {
       if (isStockAvailableForNewOrder(widget.productModel, widget.dateSelected,
-          widget.dateSelected, newQuantity)) {
+          widget.dateSelected, newQuantity.toDouble())) {
         _quantityNotifier.value = newQuantity;
-        widget.onQuantityChanged(_quantityNotifier.value);
+        widget.onQuantityChanged(_quantityNotifier.value.toDouble());
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -141,7 +141,7 @@ class _ProductTileState extends State<ProductTile> {
             child: ValueListenableBuilder<int>(
               valueListenable: _quantityNotifier,
               builder: (context, quantity, child) {
-                if (_controller.text.isEmpty || _controller.text == "0") {
+                if (_controller.text.isEmpty || _controller.text == "0.0") {
                   _controller =
                       TextEditingController(text: quantity.toString());
                 }
@@ -172,7 +172,7 @@ class _ProductTileState extends State<ProductTile> {
     );
   }
 
-  int calculateStockInUse(ProductModel productModel) {
+  double calculateStockInUse(ProductModel productModel) {
     if (productModel.datesUsed != null) {
       final now = widget.dateSelected;
 
@@ -183,13 +183,14 @@ class _ProductTileState extends State<ProductTile> {
           .where((element) =>
               !excludedIds.contains(element.id) &&
               isDateRangeOverlap(now, element.start!, element.end!))
-          .fold<int>(0, (sum, element) => sum + (element.borrowQuantity ?? 0));
+          .fold<double>(
+              0, (sum, element) => sum + (element.borrowQuantity ?? 0));
 
       final availableStock = productModel.amount - totalBorrowed;
 
       return availableStock;
     }
-    return productModel.amount;
+    return productModel.amount.toDouble();
   }
 
   bool isSameDay(DateTime date1, DateTime date2) {
@@ -217,7 +218,7 @@ class _ProductTileState extends State<ProductTile> {
 
 // Check stock availability for a new order
   bool isStockAvailableForNewOrder(ProductModel productModel,
-      DateTime newOrderStart, DateTime newOrderEnd, int newBorrowQuantity) {
+      DateTime newOrderStart, DateTime newOrderEnd, double newBorrowQuantity) {
     if (productModel.datesUsed != null) {
       final excludedIds = databaseProvider.dateRangeMap.keys.toSet();
 
@@ -226,7 +227,8 @@ class _ProductTileState extends State<ProductTile> {
               !excludedIds.contains(element.id) &&
               isDateRangeOverlapWithRange(
                   newOrderStart, newOrderEnd, element.start!, element.end!))
-          .fold<int>(0, (sum, element) => sum + (element.borrowQuantity ?? 0));
+          .fold<double>(
+              0, (sum, element) => sum + (element.borrowQuantity ?? 0));
 
       final availableStock = productModel.amount - totalBorrowed;
 

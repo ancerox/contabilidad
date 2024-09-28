@@ -5,16 +5,17 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 
 class ProductModel extends Equatable {
+  int? initialQuantity;
   final int? id;
   final String name;
   final String? file;
-  int amount;
+  double amount;
   double unitPrice;
   final String productCategory;
-  int cost;
+  double cost;
   final String unit;
   final String productType;
-  ValueNotifier<int>? quantity;
+  ValueNotifier<double>? quantity;
   List<ProductModel>? subProduct;
   List<DateRange>? datesNotAvailable;
   List<DateRange>? datesUsed;
@@ -23,6 +24,7 @@ class ProductModel extends Equatable {
 
   ProductModel({
     this.id,
+    this.initialQuantity,
     required this.name,
     this.file,
     required this.amount,
@@ -39,22 +41,24 @@ class ProductModel extends Equatable {
   });
 
   ProductModel copyWith({
+    int? initialQuantity,
     int? id,
     String? name,
     String? file,
-    int? amount,
+    double? amount,
     double? unitPrice,
     String? productCategory,
-    int? cost,
+    double? cost,
     String? unit,
     String? productType,
-    ValueNotifier<int>? quantity,
+    ValueNotifier<double>? quantity,
     List<ProductModel>? subProduct,
     List<DateRange>? datesNotAvailable,
     List<DateRange>? datesUsed,
     bool? costModified, // Añadir al copyWith
   }) {
     return ProductModel(
+      initialQuantity: initialQuantity ?? this.initialQuantity,
       id: id ?? this.id,
       name: name ?? this.name,
       file: file ?? this.file,
@@ -74,6 +78,7 @@ class ProductModel extends Equatable {
 
   @override
   List<Object?> get props => [
+        initialQuantity,
         id,
         name,
         file,
@@ -96,6 +101,7 @@ class ProductModel extends Equatable {
   // Convierte el objeto a un Map
   Map<String, dynamic> toMap() {
     return {
+      'initialQuantity': initialQuantity,
       'id': id,
       'name': name,
       'file': file,
@@ -123,6 +129,7 @@ class ProductModel extends Equatable {
   // Crea una instancia de ProductModel desde un Map
   static ProductModel fromMap(Map<String, dynamic> map) {
     return ProductModel(
+      initialQuantity: map['initialQuantity'],
       id: map['id'],
       name: map['name'],
       file: map['file'],
@@ -130,11 +137,11 @@ class ProductModel extends Equatable {
       unitPrice: map['unitPrice'],
       productCategory: map['productCategory'],
       cost: (map['cost'] is double)
-          ? (map['cost'] as double).toInt()
-          : map['cost'] as int,
+          ? (map['cost'] as double)
+          : map['cost'] as double,
       unit: map['unit'],
       productType: map['productType'],
-      quantity: ValueNotifier<int>(map['quantity'] ?? 0),
+      quantity: ValueNotifier<double>(map['quantity'] ?? 0),
       subProduct: map['subProduct'] != null && map['subProduct'] is String
           ? (jsonDecode(map['subProduct']) as List<dynamic>?)
               ?.map((p) => ProductModel.fromMap(p as Map<String, dynamic>))

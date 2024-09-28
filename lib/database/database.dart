@@ -50,7 +50,7 @@ class DataBase extends ChangeNotifier {
       path,
       onCreate: (db, version) {
         db.execute(
-          "CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, name TEXT, file TEXT, amount INTEGER, unitPrice REAL, productCategory TEXT, cost REAL, unit TEXT, productType TEXT, subProduct TEXT, quantity INTEGER, datesNotAvailable TEXT, datesUsed TEXT, costModified INTEGER)",
+          "CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, name TEXT, file TEXT, amount REAL, unitPrice REAL, productCategory TEXT, cost REAL, unit TEXT, productType TEXT, subProduct TEXT, quantity REAL, datesNotAvailable TEXT, datesUsed TEXT, costModified INTEGER, initialQuantity INTEGER)",
         );
         db.execute(
           "CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT, clientName TEXT, celNumber TEXT, direccion TEXT, date TEXT, comment TEXT, totalCost REAL, status TEXT, margen TEXT, totalOwned TEXT, orderNumber TEXT, productList TEXT, pagos TEXT, datesInUse TEXT, adminExpenses TEXT, orderId TEXT, totalCostSpent INTEGER)",
@@ -194,74 +194,188 @@ class DataBase extends ChangeNotifier {
   //     );
   //   }
   // }
+  void adjustColumnWidth(Sheet sheetObject) {
+    var columnWidths = <int, double>{
+      5: 20.0, // Ancho de la segunda columna (Monto de transacción)
+      // Agrega más columnas si es necesario
+    };
+
+    // Ajustar el ancho de las columnas
+    for (var entry in columnWidths.entries) {
+      sheetObject.setColWidth(entry.key, entry.value);
+    }
+  }
+
   Future<void> exportToExcel(
       BuildContext context, List<OrderModel> orders) async {
     try {
-      // Solicita al usuario seleccionar un directorio
-      orders.sort((a, b) => a.date.compareTo(b.date));
+      // Step 1: Request permissions properly
+      if (await _requestStoragePermission()) {
+        // Step 2: Create Excel file
+        var excel = Excel.createExcel();
+        Sheet transactions = excel['Transacciones'];
+        Sheet sheetObject = excel['Ordenes'];
 
-      var excel = Excel.createExcel();
+        adjustColumnWidth(transactions);
 
-      // Crea una hoja llamada "Ordenes"
-      Sheet sheetObject = excel['Ordenes'];
+        transactions.appendRow([
+          'Trassacion',
+          'Orden',
+          'Cliente/concepto',
+          'Fecha',
+          'Monto de trasaccion',
+        ]);
 
-      // Fila de encabezado
-      sheetObject.appendRow([
-        'Numero de orden',
-        'Cliente',
-        'Fecha',
-        'Total adeudado',
-        'Producto',
-        'Qty',
-        'Precio',
-        'Costo',
-        'Margen',
-        'Costos administrativos',
-        'Estatus'
-      ]);
-
-      // Filas de datos
-      for (var order in orders) {
-        for (var product in order.productList!) {
-          sheetObject.appendRow([
-            order.orderId.toString(),
-            order.clientName,
-            order.date,
-            order.totalOwned,
-            product.name,
-            product.quantity!.value,
-            product.unitPrice,
-            product.cost,
-            product.unitPrice - product.cost,
-            order.adminExpenses,
-            order.status,
-          ]);
+        for (var order in orders) {
+          if (order.status == "Costo de orden" ||
+              order.status == "Pago" ||
+              order.status == "Compra") {
+            transactions.appendRow([
+              order.status,
+              order.orderId,
+              order.clientName,
+              order.date,
+              order.totalCost
+            ]);
+          }
         }
+
+        // Add headers
+        sheetObject.appendRow([
+          'Numero de orden',
+          'Cliente',
+          'Fecha',
+          'Total adeudado',
+          'Producto',
+          'Tipo',
+          'Categoria',
+          'Unidad de medida',
+          'Cantidad',
+          'Precio',
+          'Costo',
+          'Margen',
+          'Estatus'
+        ]);
+
+        // Add data rows
+        for (var order in orders) {
+          for (var product in order.productList!) {
+            sheetObject.appendRow([
+              order.orderId.toString(),
+              order.clientName,
+              (order.date),
+              order.totalOwned,
+              product.name,
+              product.productType,
+              product.productCategory,
+              product.unit,
+              product.quantity!.value,
+              product.unitPrice,
+              product.cost,
+              product.unitPrice - product.cost,
+              order.status,
+            ]);
+            if (product.subProduct != null && product.subProduct!.isNotEmpty) {
+              for (var subproduct in product.subProduct!) {
+                sheetObject.appendRow([
+                  order.orderId.toString(),
+                  order.clientName,
+                  (order.date),
+                  order.totalOwned,
+                  subproduct.name,
+                  subproduct.productType,
+                  subproduct.productCategory,
+                  subproduct.unit,
+                  subproduct.quantity!.value,
+                  subproduct.unitPrice,
+                  subproduct.cost,
+                  subproduct.unitPrice - subproduct.cost,
+                  order.status,
+                ]);
+              }
+            }
+          }
+
+          for (var product in order.adminExpenses!) {
+            sheetObject.appendRow([
+              order.orderId.toString(),
+              order.clientName,
+              order.date,
+              order.totalOwned,
+              product.name,
+              product.productType,
+              product.productCategory,
+              product.unit,
+              product.quantity!.value,
+              product.unitPrice,
+              product.cost,
+              product.unitPrice - product.cost,
+              order.status,
+            ]);
+          }
+        }
+
+        // Step 3: Get the file path
+        Directory? directory;
+        if (Platform.isAndroid) {
+          directory = Directory(
+              '/storage/emulated/0/Download'); // For Android Downloads folder
+        } else if (Platform.isIOS) {
+          directory =
+              await getApplicationDocumentsDirectory(); // For iOS Documents folder
+        }
+
+        String path = directory!.path;
+
+        // Step 4: Create a unique file name
+        String filename = 'ordenes.xlsx';
+        File file = File('$path/$filename');
+        int i = 1;
+        while (await file.exists()) {
+          filename = 'ordenes($i).xlsx';
+          file = File('$path/$filename');
+          i++;
+        }
+
+        // Step 5: Save the file
+        await file.writeAsBytes(excel.encode()!);
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Archivo Excel guardado en: Descargas/$filename')),
+        );
+      } else {
+        // If permission is denied
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Permiso para acceder al almacenamiento denegado')),
+        );
       }
-
-      // Guardar el archivo en el directorio seleccionado
-      final directory = await getTemporaryDirectory();
-      final String path = p.join(directory.path, 'ordenes.xlsx');
-
-      // Guardar temporalmente el archivo
-      final File file = File(path)
-        ..createSync(recursive: true)
-        ..writeAsBytesSync(excel.encode()!);
-
-      // Compartir el archivo usando share_plus
-      await Share.shareFiles([path],
-          text: 'Aquí tienes las órdenes en formato Excel');
-
-      // Mostrar mensaje de éxito
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Archivo Excel guardado en $path')),
-      );
     } catch (e) {
-      // Mostrar mensaje de error
+      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al exportar Excel: $e')),
       );
     }
+  }
+
+// Function to request storage permission
+  Future<bool> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      // Handle Android 11 and above
+      if (await Permission.manageExternalStorage.request().isGranted) {
+        return true;
+      } else if (await Permission.storage.request().isGranted) {
+        return true;
+      } else {
+        return false;
+      }
+    } else if (Platform.isIOS) {
+      // iOS storage permission
+      return await Permission.photos.request().isGranted;
+    }
+    return false;
   }
 
   Future<void> exportAndShareExcel(
@@ -399,7 +513,7 @@ class DataBase extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateProductAmount(int id, int newAmount) async {
+  Future<void> updateProductAmount(int id, double newAmount) async {
     final db = await getDatabase();
 
     try {
@@ -543,7 +657,7 @@ class DataBase extends ChangeNotifier {
         if (productData.isNotEmpty &&
                 product.productType == "Producto terminado" ||
             product.productType == "Materia prima") {
-          var currentAmount = productData.first['amount'] as int;
+          var currentAmount = productData.first['amount'];
           var newAmount = currentAmount - product.quantity!.value;
 
           // Actualiza la cantidad del producto en la base de datos
@@ -659,7 +773,7 @@ class DataBase extends ChangeNotifier {
           for (var product in products) {
             try {
               // Log the product details to verify they are correct
-              int quantity = product.quantity?.value ?? 0;
+              double quantity = product.quantity?.value ?? 0;
               print(
                   'Linking product with ID: ${product.id} and quantity: $quantity');
 

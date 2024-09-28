@@ -205,7 +205,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     double total = 0.0;
     for (var product in dataBaseProvider.selectedProductsNotifier.value) {
       double unitPrice = double.tryParse(product.unitPrice.toString()) ?? 0.0;
-      int quantity = product.quantity?.value ?? 0;
+      double quantity = product.quantity?.value ?? 0;
 
       // Get the corresponding date ranges for the current product
       List<DateRange>? dateRanges = productDateRanges[product.id];
@@ -226,11 +226,32 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return productList;
   }
 
+  int daysBetween(DateTime from, DateTime to) {
+    // Reset time to midnight to avoid time differences affecting the day calculation
+    from = DateTime(from.year, from.month, from.day);
+    to = DateTime(to.year, to.month, to.day);
+
+    return to.difference(from).inDays;
+  }
+
   _onCreateOrder() async {
     if (isOrdenExpress || _formKey.currentState!.validate()) {
+      // if (dataBaseProvider.selectedProductsNotifier.value
+      //     .any((element) => element.quantity!.value == 0)) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(
+      //         content: Text(
+      //             'Agrega una cantidad a todos los productos selecionados')),
+      //   );
+      //   return;
+      // }
       if (_totalController.text.isEmpty) _totalController.text = "0";
 
-      final listProducts = dataBaseProvider.selectedProductsNotifier.value;
+      List<ProductModel> listProducts =
+          dataBaseProvider.selectedProductsNotifier.value;
+
+      // listProducts =
+      //     listProducts.where((element) => element.quantity!.value > 0).toList();
 
       // final isPaid =
       //     pagos.fold(0, (sum, element) => sum + element.amount.toInt()) >=
@@ -253,13 +274,45 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           comment: _commnetController.text,
           totalCost: dataBaseProvider.totalPriceNotifier.value,
           totalCostSpent: listProducts.fold(
-                  0,
-                  (previousValue, element) =>
-                      element.quantity!.value * element.cost) +
+                0,
+                (previousValue, element) {
+                  double cost = 0;
+
+                  // Verificar si productDateRanges no es nulo y tiene un valor para el elemento actual
+                  if (productDateRanges[element.id!] != null &&
+                      productDateRanges[element.id!]!.isNotEmpty) {
+                    // Get the start and end dates for the product
+                    var startDate =
+                        productDateRanges[element.id!]!.first.start!;
+                    var endDate = productDateRanges[element.id!]!.first.end!;
+
+                    // Calculate the total number of days between start and end
+                    var totalDays = endDate.difference(startDate).inDays + 1;
+
+                    // Update the cost by multiplying the days occupied by the product's cost
+                    cost = element.quantity!.value * totalDays * element.cost;
+
+                    cost += previousValue;
+                    previousValue = cost.toInt();
+                    return cost.toInt();
+                  } else {
+                    var cost = previousValue +
+                        (element.quantity!.value * element.cost);
+                    return cost.toInt();
+                  }
+                },
+              ) +
               dataBaseProvider.selectedCommodities.value.fold(
                   0,
                   (previousValue, element) =>
-                      element.quantity!.value * element.cost));
+                      previousValue +
+                      element.quantity!.value.toInt() * element.cost.toInt()));
+
+      if (widget.isEditPage == false) {
+        for (var element in order.productList!) {
+          element.initialQuantity = element.quantity!.value.toInt();
+        }
+      }
 
       if (widget.isEditPage && widget.order != null) {
         order.id = orderId;
@@ -322,6 +375,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   void _initializeEditOrder() {
+    if (widget.order!.clientName.isEmpty) {
+      isOrdenExpress = true;
+    }
     orderId = widget.order!.id;
     dataBaseProvider.selectedProductsNotifier.value =
         widget.order!.productList!;
@@ -362,6 +418,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     if (hasDatesUsed) {
       setState(() {
         _selectedOption = 'Alquiler';
+        optionSelectedVenta = 'Alquiler';
       });
 
       if (widget.order == null || widget.order!.datesInUse == null) return;
@@ -443,11 +500,14 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return totalPrice;
   }
 
-  void _addPago() {
+  void _addPago() async {
     if (_paymentDateController.text.isNotEmpty &&
         _paymentAmountController.text.isNotEmpty) {
+      const uuid = Uuid();
+      final uid = uuid.v4();
       setState(() {
         pagos.add(PagoModel(
+          id: uid,
           date: _paymentDateController.text,
           amount: double.parse(_paymentAmountController.text),
         ));
@@ -466,11 +526,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
     for (var entry in productDateRanges.entries) {
       final dateRanges = entry.value;
-      final totalDays = dateRanges.fold<int>(
-        0,
-        (rangeSum, dateRange) =>
-            rangeSum + dateRange.end!.difference(dateRange.start!).inDays + 1,
-      );
+
+      final totalDays = dateRanges.fold<int>(0, (rangeSum, dateRange) {
+        if (dateRange.end == null) {
+          return 0;
+        }
+        return rangeSum +
+            dateRange.end!.difference(dateRange.start!).inDays +
+            1;
+      });
 
       final product = await dataBaseProvider.getProductById(entry.key);
       if (product != null) {
@@ -480,6 +544,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
     return totalRentalPrice;
   }
+
+  final bool isownedExpress = false;
 
   @override
   Widget build(BuildContext context) {
@@ -592,18 +658,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             .toLowerCase()
                             .compareTo(b.name.toLowerCase()));
 
-                        int totalquantity = selectedProducts.fold(
+                        double totalquantity = selectedProducts.fold(
                             0,
-                            (int sum, ProductModel product) =>
+                            (double sum, ProductModel product) =>
                                 sum +
                                 product.unitPrice.toInt() *
                                     product.quantity!.value);
-                        int totalCost = selectedProducts.fold(
+                        double totalCost = selectedProducts.fold(
                             0,
-                            (int sum, ProductModel product) =>
+                            (double sum, ProductModel product) =>
                                 sum +
                                 product.cost.toInt() * product.quantity!.value);
-                        totalOwned = totalquantity - grantTotalOwned;
+                        totalOwned = totalquantity.toInt() - grantTotalOwned;
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -643,7 +709,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                     product.unitPrice
                                                         .toString()) ??
                                                 0.0;
-                                            int quantity =
+                                            double quantity =
                                                 product.quantity!.value;
 
                                             double totalPrice =
@@ -660,7 +726,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                               costOnChange: (String value) {
                                                 if (value != "") {
                                                   product.cost =
-                                                      int.parse(value);
+                                                      double.parse(value);
                                                   _calculateTotalPrice();
                                                 }
                                               },
@@ -676,14 +742,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                   return;
                                                 }
                                                 product.quantity!.value =
-                                                    int.parse(value);
+                                                    double.parse(value);
                                                 _updateCheckoutButtonState();
                                                 _updateSelectedProductQuantity(
                                                     product,
                                                     int.parse(controller.text),
                                                     true);
-                                                totalOwned = totalquantity -
-                                                    grantTotalOwned;
+                                                totalOwned =
+                                                    totalquantity.toInt() -
+                                                        grantTotalOwned;
                                                 _calculateTotalPrice();
                                                 setState(() {});
                                               },
@@ -821,6 +888,93 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         );
                       },
                     )),
+                    const Text('Total Adeudado',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
+                    Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.2),
+                            spreadRadius: 2,
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: dataBaseProvider
+                              .selectedProductsNotifier.value.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "Por favor, escoga al menos un producto",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                            )
+                          : Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 10),
+                              width: double.infinity,
+                              child: FutureBuilder<double>(
+                                future: calculateTotalRentalPrice(
+                                    dataBaseProvider, productDateRanges),
+                                builder: (BuildContext context,
+                                    AsyncSnapshot<double> snapshot) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
+                                    return const CircularProgressIndicator(); // Show a loading indicator while waiting
+                                  } else if (snapshot.hasError) {
+                                    return Text('Error: ${snapshot.error}');
+                                  } else {
+                                    final totalRentalPrice =
+                                        snapshot.data ?? 0.0;
+                                    return ValueListenableBuilder<double>(
+                                      valueListenable:
+                                          dataBaseProvider.totalPriceNotifier,
+                                      builder: (context, quantity, child) {
+                                        return ValueListenableBuilder(
+                                          valueListenable: dataBaseProvider
+                                              .selectedCommodities,
+                                          builder: (context,
+                                              selectedCommodities, child) {
+                                            final earningsCommodities =
+                                                selectedCommodities.fold(0.0,
+                                                    (sum, product) {
+                                              return sum +
+                                                  (product.unitPrice *
+                                                      product.quantity!.value);
+                                            });
+                                            final totalOwnedOrder =
+                                                productDateRanges.isNotEmpty
+                                                    ? (quantity -
+                                                            grantTotalOwned +
+                                                            earningsCommodities)
+                                                        .toStringAsFixed(2)
+                                                    : "${totalOwned + earningsCommodities}";
+
+                                            totalOwnedGlobal = totalOwnedOrder;
+                                            totalOwned =
+                                                double.parse(totalOwnedOrder)
+                                                    .toInt();
+                                            return Text(
+                                              totalOwnedOrder,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 18,
+                                              ),
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                    ),
                     Container(
                       margin: const EdgeInsets.all(20),
                       width: double.infinity,
@@ -941,19 +1095,20 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           valueListenable:
                               dataBaseProvider.selectedProductsNotifier,
                           builder: (context, selectedProducts, child) {
-                            int totalquantity = selectedProducts.fold(
+                            double totalquantity = selectedProducts.fold(
                                 0,
-                                (int sum, ProductModel product) =>
+                                (double sum, ProductModel product) =>
                                     sum +
                                     product.unitPrice.toInt() *
                                         product.quantity!.value);
-                            int totalCost = selectedProducts.fold(
+                            double totalCost = selectedProducts.fold(
                                 0,
-                                (int sum, ProductModel product) =>
+                                (double sum, ProductModel product) =>
                                     sum +
                                     product.cost.toInt() *
                                         product.quantity!.value);
-                            totalOwned = totalquantity - grantTotalOwned;
+                            totalOwned =
+                                totalquantity.toInt() - grantTotalOwned;
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -991,12 +1146,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                           .unitPrice
                                                           .toString()) ??
                                                       0.0;
-                                              int quantity =
+                                              double quantity =
                                                   product.quantity!.value;
 
                                               double totalPrice =
                                                   quantity * unitPrice;
-                                              int totalcost =
+                                              double totalcost =
                                                   product.cost.toInt() *
                                                       quantity;
 
@@ -1008,7 +1163,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                 costOnChange: (String value) {
                                                   if (value != "") {
                                                     product.cost =
-                                                        int.parse(value);
+                                                        double.parse(value);
                                                     _calculateTotalPrice();
                                                   }
                                                 },
@@ -1016,7 +1171,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                     (String value) {
                                                   setState(() {});
                                                 },
-                                                cost: totalcost,
+                                                cost: totalcost.toInt(),
                                                 imagePath: product.file!,
                                                 name: product.name,
                                                 precio: product.unitPrice,
@@ -1026,15 +1181,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                     return;
                                                   }
                                                   product.quantity!.value =
-                                                      int.parse(value);
+                                                      double.parse(value);
                                                   _updateCheckoutButtonState();
                                                   _updateSelectedProductQuantity(
                                                       product,
                                                       int.parse(
                                                           controller.text),
                                                       true);
-                                                  totalOwned = totalquantity -
-                                                      grantTotalOwned;
+                                                  totalOwned =
+                                                      totalquantity.toInt() -
+                                                          grantTotalOwned;
                                                   _calculateTotalPrice();
                                                   setState(() {});
                                                 },
@@ -1047,15 +1203,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                   setState(() {});
                                                 },
                                                 minus: () {
-                                                  if (product.quantity!.value ==
-                                                      1) {
-                                                    setState(() {
-                                                      selectedProducts
-                                                          .remove(product);
-                                                      _calculateTotalPrice();
-                                                    });
-                                                    return;
-                                                  }
+                                                  // if (product.quantity!.value ==
+                                                  //     1) {
+                                                  //   setState(() {
+                                                  //     selectedProducts
+                                                  //         .remove(product);
+                                                  //     _calculateTotalPrice();
+                                                  //   });
+                                                  //   return;
+                                                  // }
 
                                                   product.quantity!.value--;
                                                   _updateCheckoutButtonState();
@@ -1102,12 +1258,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                           .unitPrice
                                                           .toString()) ??
                                                       0.0;
-                                              int quantity =
+                                              double quantity =
                                                   product.quantity!.value;
 
                                               double totalPrice =
                                                   quantity * unitPrice;
-                                              int totalcost =
+                                              double totalcost =
                                                   product.cost.toInt() *
                                                       quantity;
 
@@ -1119,7 +1275,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                 costOnChange: (String value) {
                                                   if (value != "") {
                                                     product.cost =
-                                                        int.parse(value);
+                                                        double.parse(value);
                                                     _calculateTotalPrice();
                                                   }
                                                 },
@@ -1127,7 +1283,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                     (String value) {
                                                   setState(() {});
                                                 },
-                                                cost: totalcost,
+                                                cost: totalcost.toInt(),
                                                 imagePath: product.file!,
                                                 name: product.name,
                                                 precio: product.unitPrice,
@@ -1137,15 +1293,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                     return;
                                                   }
                                                   product.quantity!.value =
-                                                      int.parse(value);
+                                                      double.parse(value);
                                                   _updateCheckoutButtonState();
                                                   _updateSelectedProductQuantity(
                                                       product,
                                                       int.parse(
                                                           controller.text),
                                                       true);
-                                                  totalOwned = totalquantity -
-                                                      grantTotalOwned;
+                                                  totalOwned =
+                                                      totalquantity.toInt() -
+                                                          grantTotalOwned;
                                                   _calculateTotalPrice();
                                                   setState(() {});
                                                 },
@@ -1231,17 +1388,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                           builder: (context,
                                                               totalPrice,
                                                               child) {
-                                                            int adminCost = dataBaseProvider
-                                                                .selectedCommodities
-                                                                .value
-                                                                .fold(
-                                                                    0,
-                                                                    (int sum,
-                                                                            ProductModel
-                                                                                product) =>
-                                                                        sum +
-                                                                        product.unitPrice.toInt() *
-                                                                            product.quantity!.value);
+                                                            int adminCost = dataBaseProvider.selectedCommodities.value.fold(
+                                                                0,
+                                                                (int sum,
+                                                                        ProductModel
+                                                                            product) =>
+                                                                    sum +
+                                                                    product.unitPrice
+                                                                            .toInt() *
+                                                                        product
+                                                                            .quantity!
+                                                                            .value
+                                                                            .toInt());
                                                             totalPrice +=
                                                                 adminCost;
                                                             return Text(
@@ -1784,11 +1942,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           if (product.datesUsed != null) {
                             bool isFullyBooked = false;
                             bool isPartiallyBooked = false;
-                            int totalBorrowed = 0;
+                            double totalBorrowed = 0;
 
                             for (var element in product.datesUsed!) {
-                              if ((day.isAfter(element.start!) &&
-                                      day.isBefore(element.end!)) ||
+                              if (element.start != null &&
+                                      (day.isAfter(element.start!) &&
+                                          day.isBefore(element.end!)) ||
                                   day == element.start ||
                                   day == element.end) {
                                 totalBorrowed += element.borrowQuantity ?? 0;
@@ -2007,8 +2166,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                 productDateRanges.remove(product.id);
 
                                 // Remove the product from selectedProductsNotifier
-                                dataBaseProvider.selectedProductsNotifier.value
-                                    .removeWhere((p) => p.id == product.id);
+                                // dataBaseProvider.selectedProductsNotifier.value
+                                //     .removeWhere((p) => p.id == product.id);
                                 dataBaseProvider.selectedProductsNotifier
                                     .notifyListeners();
                               });

@@ -21,7 +21,7 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
       ValueNotifier<String>('Producto terminado');
   final Map<String, TextEditingController> _quantityControllers = {};
   ValueNotifier<bool> isCheckoutButtonEnabled = ValueNotifier(false);
-  final Map<String, ValueNotifier<int>> _quantityNotifiers = {};
+  final Map<String, ValueNotifier<double>> _quantityNotifiers = {};
   late DataBase dataBaseProvider;
 
   @override
@@ -52,8 +52,8 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
   }
 
   void _updateSelectedProductQuantity(
-      ProductModel product, int change, bool isOverwrite) {
-    int updatedQuantity =
+      ProductModel product, double change, bool isOverwrite) {
+    double updatedQuantity =
         isOverwrite ? change : (product.quantity?.value ?? 0) + change;
 
     if (updatedQuantity <= 0) {
@@ -61,7 +61,7 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
       product.quantity?.value = 0;
     } else {
       if (product.quantity == null) {
-        product.quantity = ValueNotifier<int>(updatedQuantity);
+        product.quantity = ValueNotifier<double>(updatedQuantity);
       } else {
         product.quantity!.value = updatedQuantity;
       }
@@ -84,10 +84,10 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
         productId, () => TextEditingController());
   }
 
-  ValueNotifier<int> _getOrCreateQuantityNotifier(
-      String productId, int initialQuantity) {
+  ValueNotifier<double> _getOrCreateQuantityNotifier(
+      String productId, double initialQuantity) {
     return _quantityNotifiers.putIfAbsent(
-        productId, () => ValueNotifier<int>(initialQuantity));
+        productId, () => ValueNotifier<double>(initialQuantity));
   }
 
   @override
@@ -97,7 +97,7 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
     return Scaffold(
       body: SafeArea(
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(10),
           child: Column(
             children: [
               // Filter options UI
@@ -161,6 +161,9 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
                     },
                   ),
                 ),
+                onChanged: (String value) {
+                  setState(() {});
+                },
               ),
               Expanded(
                 child: FutureBuilder<List<ProductModel>>(
@@ -216,11 +219,12 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
                               _getOrCreateController(product.id.toString());
 
                           return Item(
+                            subProducts: product.subProduct,
                             cost: product.cost.toInt(),
                             costOnChange: (String value) {
                               _updateSelectedProductQuantity(
                                 products[index],
-                                int.parse(value),
+                                double.parse(value),
                                 true,
                               );
                               _updateCheckoutButtonState();
@@ -228,11 +232,11 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
                             },
                             quantityOnChange: (String value) {
                               if (value == "") return;
-                              quantityNotifier.value = int.parse(value);
+                              quantityNotifier.value = double.parse(value);
                               _updateCheckoutButtonState();
                               _updateSelectedProductQuantity(
                                 products[index],
-                                int.parse(controller.text),
+                                double.parse(controller.text),
                                 true,
                               );
                             },
@@ -245,6 +249,8 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
                                 -1,
                                 false,
                               );
+                              controller.text =
+                                  product.quantity!.value.toString();
                             },
                             plus: () {
                               quantityNotifier.value++;
@@ -254,6 +260,8 @@ class _ChoseProductOrdenScreenState extends State<ChoseProductOrdenScreen> {
                                 1,
                                 false,
                               );
+                              controller.text =
+                                  product.quantity!.value.toString();
                             },
                             quantityCTRController: controller,
                             magnitud: product.unit,

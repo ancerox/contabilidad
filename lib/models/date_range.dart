@@ -2,7 +2,7 @@ class DateRange {
   DateTime? start;
   DateTime? end;
   String? id;
-  int? borrowQuantity; // Add borrowQuantity to DateRange
+  double? borrowQuantity; // Add borrowQuantity to DateRange
 
   DateRange({this.start, this.end, this.id, this.borrowQuantity});
 
@@ -30,7 +30,7 @@ class DateRange {
       DateTime? start,
       DateTime? end,
       int? orderId,
-      int? borrowQuantity}) {
+      double? borrowQuantity}) {
     return DateRange(
       id: id ?? this.id,
       start: start ?? this.start,

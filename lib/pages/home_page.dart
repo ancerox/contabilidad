@@ -3,9 +3,11 @@ import 'package:contabilidad/database/database.dart';
 import 'package:contabilidad/pages/buy_screen.dart';
 import 'package:contabilidad/pages/create_charge_screen.dart';
 import 'package:contabilidad/pages/create_order.dart';
+import 'package:contabilidad/pages/gasto_screen.dart';
 import 'package:contabilidad/pages/history.dart';
 import 'package:contabilidad/pages/save_data_page.dart';
 import 'package:contabilidad/pages/stock_screen.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:intl/intl.dart';
@@ -19,20 +21,38 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final listOfActionsSVGs = [
+  final List<String> listOfActionsSVGs = [
     'assets/icons/compra.svg',
     'assets/icons/ordenes.svg',
-    'assets/icons/cobro.svg'
+    'assets/icons/cobro.svg',
+    'assets/icons/money-cash-svgrepo-com.svg'
   ];
-  final listOfActionsTexts = ['Compra', 'Orden', 'Cobro'];
+  final List<String> listOfActionsTexts = ['Compra', 'Orden', 'Cobro', 'Gasto'];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTimeRange? selectedDateRange;
+  late Future<Map<String, double>>? totalesFuture;
+
+  final List<DateTime> ventasDatesOrders = [];
+  final List<double> totalVentasList = [];
+
   @override
   void initState() {
-    // TODO: implement initState
-    didChangeDependencies();
     super.initState();
+    totalesFuture = _calcularTotales();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    setState(() {
+      totalesFuture = _calcularTotales(); // Refresh the future
+    });
+  }
+
+  List<String> options1 = ['Option 1', 'Option 2', 'Option 3'];
+  List<String> options2 = ['Option A', 'Option B', 'Option C'];
+
+  bool limpiarFiltro = false;
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +76,13 @@ class _HomePageState extends State<HomePage> {
             GestureDetector(
               onTap: () {
                 Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const BackupPage()));
+                        MaterialPageRoute(builder: (_) => const BackupPage()))
+                    .then((_) {
+                  // Refresh the totals when coming back
+                  setState(() {
+                    totalesFuture = _calcularTotales();
+                  });
+                });
               },
               child: const ListTile(
                 leading: Icon(Icons.settings),
@@ -101,7 +127,12 @@ class _HomePageState extends State<HomePage> {
                                       builder: (context) =>
                                           const HistoryScreen(),
                                     ),
-                                  );
+                                  ).then((_) {
+                                    // Refresh the totals when coming back
+                                    setState(() {
+                                      totalesFuture = _calcularTotales();
+                                    });
+                                  });
                                 },
                                 child: CardWidget(
                                   isFull: false,
@@ -120,6 +151,7 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                               const SizedBox(height: 10),
+                              // Uncomment and customize if needed
                               // GestureDetector(
                               //   onTap: () {
                               //     Navigator.push(
@@ -156,7 +188,12 @@ class _HomePageState extends State<HomePage> {
                                 MaterialPageRoute(
                                   builder: (context) => const StockScreen(),
                                 ),
-                              );
+                              ).then((_) {
+                                // Refresh the totals when coming back
+                                setState(() {
+                                  totalesFuture = _calcularTotales();
+                                });
+                              });
                             },
                             child: CardWidget(
                               isFull: true,
@@ -186,7 +223,8 @@ class _HomePageState extends State<HomePage> {
                         height: 130,
                         child: Center(
                           child: ListView.builder(
-                            itemCount: 3,
+                            shrinkWrap: true,
+                            itemCount: 4,
                             scrollDirection: Axis.horizontal,
                             itemBuilder: (context, index) {
                               return GestureDetector(
@@ -194,8 +232,8 @@ class _HomePageState extends State<HomePage> {
                                   quickActionsChoose(context, index);
                                 },
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20),
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 7),
                                   child: QuickActions(
                                     icon: listOfActionsSVGs[index],
                                     subtitle: listOfActionsTexts[index],
@@ -222,39 +260,64 @@ class _HomePageState extends State<HomePage> {
                           if (pickedDateRange != null) {
                             setState(() {
                               selectedDateRange = pickedDateRange;
+                              totalesFuture =
+                                  _calcularTotales(); // Refresh data
+                              limpiarFiltro = true;
                             });
                           }
                         },
-                        child: Text(
-                          selectedDateRange == null
-                              ? 'Seleccionar intervalo de fechas'
-                              : '${DateFormat('dd/MM/yyyy').format(selectedDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(selectedDateRange!.end)}',
+                        child: Row(
+                          children: [
+                            Text(
+                              selectedDateRange == null
+                                  ? 'Seleccionar intervalo de fechas'
+                                  : '${DateFormat('dd/MM/yyyy').format(selectedDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(selectedDateRange!.end)}',
+                            ),
+                            limpiarFiltro == true
+                                ? TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        selectedDateRange = null;
+                                        totalesFuture =
+                                            _calcularTotales(); // Actualiza los totales sin filtro
+                                      });
+                                    },
+                                    child: const Text('Limpiar filtro'))
+                                : Container()
+                          ],
                         ),
                       ),
                       const SizedBox(height: 15),
                       FutureBuilder<Map<String, double>>(
-                        future: _calcularTotales(context),
+                        future: totalesFuture,
                         builder: (context, snapshot) {
                           if (snapshot.connectionState ==
                               ConnectionState.waiting) {
-                            return const CircularProgressIndicator();
+                            return const Center(
+                                child: CircularProgressIndicator());
                           } else if (snapshot.hasError) {
-                            return const Text('Error al calcular los totales.');
+                            return const Center(
+                                child: Text('Error al calcular los totales.'));
                           } else {
                             final totals = snapshot.data ??
                                 {
                                   'ventas': 0.0,
                                   'costo': 0.0,
-                                  'ganancias': 0.0,
+                                  'efectivo': 0.0,
+                                  'gastos': 0.0,
+                                  'puntoEquilibrio': 0.0,
                                 };
-                            final totalVentas = totals['ventas']!;
-                            final totalCosto = totals['costo']!;
-                            final totalGanancias = totals['ganancias']!;
-                            final puntoDeEquilibrio =
+                            final double totalVentas = totals['ventas']!;
+                            final double totalCosto = totals['costo']!;
+                            final double totalGanancias = totals['efectivo']!;
+                            final double puntoDeEquilibrio =
                                 totals['puntoEquilibrio']!;
+                            final double totalGastos = totals['gastos'] ?? 0.0;
 
                             return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // Statistics Section
                                 Center(
                                   child: SingleChildScrollView(
                                     scrollDirection: Axis.horizontal,
@@ -267,7 +330,7 @@ class _HomePageState extends State<HomePage> {
                                             Statistics(
                                               color: 0xff9C4CFD,
                                               text:
-                                                  'Ingresos \n\$${totalVentas.toStringAsFixed(2)}',
+                                                  'Ventas \n\$${totalVentas.toStringAsFixed(2)}',
                                               percentage: totalVentas > 0
                                                   ? (totalVentas / 1000)
                                                       .clamp(0.0, 1.0)
@@ -276,7 +339,7 @@ class _HomePageState extends State<HomePage> {
                                             Statistics(
                                               color: 0xff0EB200,
                                               text:
-                                                  'Ganancias \n\$${totalGanancias.toStringAsFixed(2)}',
+                                                  'Efectivo \n\$${totalGanancias.toStringAsFixed(2)}',
                                               percentage: totalGanancias > 0
                                                   ? (totalGanancias / 500)
                                                       .clamp(0.0, 1.0)
@@ -285,7 +348,16 @@ class _HomePageState extends State<HomePage> {
                                             Statistics(
                                               color: 0xffF85819,
                                               text:
-                                                  'Gastos \n\$${totalCosto.toStringAsFixed(2)}',
+                                                  'Gastos \n\$${totalGastos.toStringAsFixed(2)}',
+                                              percentage: totalGastos > 0
+                                                  ? (totalGastos / 800)
+                                                      .clamp(0.0, 1.0)
+                                                  : 0.0,
+                                            ),
+                                            Statistics(
+                                              color: 0xffF85819,
+                                              text:
+                                                  'Costo \nordenes \n\$${totalCosto.toStringAsFixed(2)}',
                                               percentage: totalCosto > 0
                                                   ? (totalCosto / 800)
                                                       .clamp(0.0, 1.0)
@@ -300,37 +372,44 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                   ),
                                 ),
+                                const SizedBox(height: 20),
+                                // Line Chart Section
                                 Container(
                                   margin: const EdgeInsets.symmetric(
-                                      horizontal: 20),
+                                      horizontal: 10),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(15),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.3),
+                                        spreadRadius: 2,
+                                        blurRadius: 5,
+                                        offset: const Offset(
+                                            0, 3), // changes position of shadow
+                                      ),
+                                    ],
+                                  ),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Punto de equilibrio',
+                                        'Ventas en las últimas 8 semanas',
                                         style: subtitles.copyWith(
-                                            color: Colors.black),
+                                            color: Colors.black,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold),
                                       ),
                                       const SizedBox(height: 10),
-                                      LinearProgressIndicator(
-                                        value: puntoDeEquilibrio.clamp(0.0,
-                                            1.0), // Ajusta el valor entre 0 y 1
-                                        backgroundColor: Colors.grey[300],
-                                        color: Colors
-                                            .blue, // Cambia el color según tu preferencia
-                                      ),
-                                      const SizedBox(height: 5),
-                                      Text(
-                                        '${(puntoDeEquilibrio * 100).toStringAsFixed(2)}%',
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                      SizedBox(
+                                        height: 200,
+                                        child: _buildLineChart(),
                                       ),
                                     ],
                                   ),
-                                )
+                                ),
                               ],
                             );
                           }
@@ -347,72 +426,327 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<Map<String, double>> _calcularTotales(BuildContext context) async {
-    final dataBase = Provider.of<DataBase>(context, listen: false);
-    final orders = await dataBase.getAllOrdersWithProducts();
+  /// Builds the Line Chart using fl_chart package
+  Widget _buildLineChart() {
+    if (ventasDatesOrders.isEmpty || totalVentasList.isEmpty) {
+      return const Center(child: Text('No hay datos para mostrar.'));
+    }
 
+    // Combine the date and sales lists
+    List<MapEntry<DateTime, double>> combinedList = List.generate(
+      ventasDatesOrders.length,
+      (index) => MapEntry(ventasDatesOrders[index], totalVentasList[index]),
+    );
+
+    // Sort the list by DateTime
+    combinedList.sort((a, b) => a.key.compareTo(b.key));
+
+    // Get today's date
+    DateTime now = DateTime.now();
+
+// Calculate the start of the current week (assuming week starts on Monday)
+    int daysToSubtract = now.weekday - DateTime.sunday;
+    DateTime startOfCurrentWeek = now.subtract(Duration(days: daysToSubtract));
+
+// Define the date 8 weeks ago from the start of the current week
+    DateTime eightWeeksAgo =
+        startOfCurrentWeek.subtract(const Duration(days: 56));
+
+// Filter data within the last 8 weeks and aggregate it by week
+// Filter data within the last 8 weeks and aggregate it by week
+    Map<int, double> weeklyTotals = {};
+    for (var entry in combinedList) {
+      if (entry.key.isAfter(eightWeeksAgo) ||
+          entry.key.isAtSameMomentAs(eightWeeksAgo)) {
+        // Calculate the week number from the start of the current week
+        int weekOfYear = (entry.key.difference(eightWeeksAgo).inDays ~/ 7);
+        if (weeklyTotals.containsKey(weekOfYear)) {
+          weeklyTotals[weekOfYear] = weeklyTotals[weekOfYear]! + entry.value;
+        } else {
+          weeklyTotals[weekOfYear] = entry.value;
+        }
+      }
+    }
+    // Create FlSpots from the aggregated weekly data
+    // Create FlSpots from the aggregated weekly data
+    List<FlSpot> spots = [];
+
+// Ensure we have an entry for each of the 8 weeks (even if no sales were made)
+    // Ensure we have an entry for each of the 8 weeks (even if no sales were made)
+    for (int week = 0; week <= 7; week++) {
+      if (weeklyTotals.containsKey(week)) {
+        spots.add(FlSpot(week.toDouble(), weeklyTotals[week]!));
+      } else {
+        // No sales for this week, so we set the value to 0
+        spots.add(FlSpot(week.toDouble(), 0));
+      }
+    }
+
+    if (spots.isEmpty) {
+      return const Center(
+          child: Text('No hay datos en las últimas 8 semanas.'));
+    }
+
+    // Define min and max for X axis
+    double minX = 0;
+    double maxX = 7; // Should represent 0 to 7 for 8 weeks.
+    // Define min and max for Y axis
+    double minY = weeklyTotals.values.fold<double>(
+        double.infinity, (prev, element) => element < prev ? element : prev);
+    double maxY = weeklyTotals.values.fold<double>(double.negativeInfinity,
+        (prev, element) => element > prev ? element : prev);
+
+    minY = (minY > 0) ? 0 : minY;
+    maxY = maxY + (maxY * 0.1); // Add 10% padding on top
+
+    return LineChart(
+      LineChartData(
+        minX: minX,
+        maxX: maxX,
+        minY: minY,
+        maxY: maxY,
+        gridData: FlGridData(
+          show: true,
+          drawHorizontalLine: true,
+          horizontalInterval: (maxY - minY) / 5,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: Colors.grey[300],
+              strokeWidth: 1,
+            );
+          },
+          drawVerticalLine: false,
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 1, // 1 label per week
+              getTitlesWidget: (value, meta) {
+                DateTime currentDate = DateTime.now();
+
+                // Step 2: Calculate the start of the current week (assuming weeks start on Monday)
+                DateTime currentWeekStart =
+                    currentDate.subtract(Duration(days: currentDate.weekday));
+
+                // Step 3: Go back 8 weeks from the current week start
+                DateTime weekStart = currentWeekStart
+                    .subtract(Duration(days: (7 * (7 - value.toInt()))));
+
+                // Step 4: Format the weekStart date for display
+                String formattedDate = DateFormat('dd/MM').format(weekStart);
+
+                // Step 5: Return the formatted date as a widget
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    formattedDate,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 10,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: (maxY - minY) / 5,
+              getTitlesWidget: (value, meta) {
+                return Text(
+                  '\$${value.toInt()}',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 10,
+                  ),
+                );
+              },
+              reservedSize: 40,
+            ),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+        ),
+        borderData: FlBorderData(
+          show: true,
+          border: Border.all(color: Colors.grey[300]!, width: 1),
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            gradient: const LinearGradient(
+              colors: [
+                Color.fromARGB(255, 224, 13, 231),
+                Color(0xff81C784),
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(
+              show: true,
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [
+                  Colors.green.withOpacity(0.9),
+                  Colors.green.withOpacity(0.0),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((spot) {
+                DateTime weekStart =
+                    eightWeeksAgo.add(Duration(days: spot.x.toInt() * 7));
+                String formattedDate =
+                    DateFormat('dd/MM/yyyy').format(weekStart);
+                return LineTooltipItem(
+                  '$formattedDate\n\$${spot.y.toStringAsFixed(2)}',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                );
+              }).toList();
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, double>> _calcularTotales() async {
+    final dataBase = Provider.of<DataBase>(context, listen: false);
+
+    final orders = await dataBase.getAllOrdersWithProducts();
     double totalVentas = 0.0;
-    double totalCosto = 0.0;
-    double totalGanancias = 0.0;
+    double totalCostoOrdenes = 0.0;
+    double totalEfectivo = 0.0;
+    double totalGastos = 0.0;
+    double totalInversion = 0.0;
+    double sumatoriaCompra = 0.0;
+    double totalProduccion = 0.0;
+
+    // Clear previous data to avoid duplicates
+    ventasDatesOrders.clear();
+    totalVentasList.clear();
 
     if (selectedDateRange != null) {
       for (var order in orders) {
-        if (order.status == "Pago") {
-          if (order.productList != null && order.productList!.isNotEmpty) {
-            final orderDate = _parseDate(order.date);
-            if (orderDate != null &&
-                orderDate.isAfter(selectedDateRange!.start) &&
-                orderDate.isBefore(selectedDateRange!.end)) {
-              for (var product in order.productList!) {
-                final ventas = product.quantity!.value * product.unitPrice;
-                final costo = product.quantity!.value * product.cost;
-                final ganancia = ventas - costo;
-
-                totalVentas += ventas;
-                totalCosto += costo;
-                totalGanancias += ganancia;
-              }
+        if (order.productList != null && order.productList!.isNotEmpty) {
+          final orderDate = parseDate(order.date);
+          if (orderDate != null &&
+              (orderDate.isAfter(selectedDateRange!.start
+                      .subtract(const Duration(days: 1))) &&
+                  orderDate.isBefore(
+                      selectedDateRange!.end.add(const Duration(days: 1))))) {
+            // Process order
+            if (order.status == "Costo de orden") {
+              final costos = order.totalCost;
+              totalCostoOrdenes += costos;
             }
-          } else {
-            totalVentas += order.totalCost;
-            totalGanancias += order.totalCost;
+            if (order.status == "Pago" && order.margen.isNotEmpty) {
+              final ventas = order.totalCost;
+              DateTime? ventaDate = parseDate(order.date);
+              if (ventaDate != null && ventas > 0) {
+                ventasDatesOrders.add(ventaDate);
+                totalVentasList.add(ventas);
+              }
+              totalVentas += ventas;
+            }
+            if (order.status == "Pago" && order.margen.isEmpty) {
+              final inversion = order.totalCost;
+              totalInversion += inversion;
+            }
+
+            if (order.status == "Gasto" && order.margen.isEmpty) {
+              final gastos = order.totalCost;
+              totalGastos += gastos;
+            }
+
+            if (order.status == "Compra" && order.margen.isNotEmpty) {
+              final compra = order.totalCost;
+              sumatoriaCompra += compra;
+            }
+            if (order.status == "Produccion" && order.margen.isNotEmpty) {
+              final produccion = order.totalCost;
+              totalProduccion += produccion;
+            }
+            totalEfectivo =
+                (totalVentas + totalInversion + totalProduccion.abs()) -
+                    sumatoriaCompra -
+                    totalGastos;
           }
         }
       }
     } else {
       for (var order in orders) {
-        if (order.status == "Pago") {
-          if (order.productList != null && order.productList!.isNotEmpty) {
-            for (var product in order.productList!) {
-              final ventas = order.totalCost;
-              final costo = product.quantity!.value * product.cost;
-              final ganancia = ventas - costo;
-
-              totalVentas += ventas;
-              totalCosto += costo;
-              totalGanancias += ganancia;
-            }
-          } else {
-            totalVentas += order.totalCost;
-            totalGanancias += order.totalCost;
-          }
+        if (order.status == "Costo de orden") {
+          final costos = order.totalCost;
+          totalCostoOrdenes += costos;
         }
+        if (order.status == "Pago" && order.margen.isNotEmpty) {
+          final ventas = order.totalCost;
+          DateTime? ventaDate = parseDate(order.date);
+          if (ventaDate != null && ventas > 0) {
+            ventasDatesOrders.add(ventaDate);
+            totalVentasList.add(ventas);
+          }
+          totalVentas += ventas;
+        }
+        if (order.status == "Pago" && order.margen.isEmpty) {
+          final inversion = order.totalCost;
+          totalInversion += inversion;
+        }
+
+        if (order.status == "Gasto" && order.margen.isEmpty) {
+          final gastos = order.totalCost;
+          totalGastos += gastos;
+        }
+
+        if (order.status == "Compra" && order.margen.isNotEmpty) {
+          final compra = order.totalCost;
+          sumatoriaCompra += compra;
+        }
+        if (order.status == "Produccion" && order.margen.isNotEmpty) {
+          final produccion = order.totalCost;
+          totalProduccion += produccion;
+        }
+        totalEfectivo = (totalVentas + totalInversion + totalProduccion.abs()) -
+            sumatoriaCompra -
+            totalGastos;
       }
     }
 
-    final puntoDeEquilibrio = totalCosto != 0
-        ? totalCosto
-        : 0.0; // Si no hay costo, el punto de equilibrio es 0.
+    final double puntoDeEquilibrio =
+        totalCostoOrdenes != 0 ? totalCostoOrdenes : 0.0; // Equilibrium point
 
     return {
       'ventas': totalVentas,
-      'costo': totalCosto,
-      'ganancias': totalGanancias,
+      'costo': totalCostoOrdenes,
+      'efectivo': totalEfectivo,
+      'gastos': totalGastos,
       'puntoEquilibrio': puntoDeEquilibrio,
     };
   }
 
-  DateTime? _parseDate(String date) {
+  DateTime? parseDate(String date) {
     try {
       return DateFormat("yyyy-MM-dd HH:mm:ss.SSSSSS").parse(date);
     } catch (e) {
@@ -431,7 +765,12 @@ class _HomePageState extends State<HomePage> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const PaymentScreen()),
-        );
+        ).then((_) {
+          // Refresh the totals when coming back
+          setState(() {
+            totalesFuture = _calcularTotales();
+          });
+        });
         break;
       case 1:
         Navigator.push(
@@ -440,13 +779,34 @@ class _HomePageState extends State<HomePage> {
               builder: (context) => const CreateOrderScreen(
                     isEditPage: false,
                   )),
-        );
+        ).then((_) {
+          // Refresh the totals when coming back
+          setState(() {
+            totalesFuture = _calcularTotales();
+          });
+        });
         break;
       case 2:
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const AgregarCobroPage()),
-        );
+        ).then((_) {
+          // Refresh the totals when coming back
+          setState(() {
+            totalesFuture = _calcularTotales();
+          });
+        });
+        break;
+      case 3:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AgregarGastoPage()),
+        ).then((_) {
+          // Refresh the totals when coming back
+          setState(() {
+            totalesFuture = _calcularTotales();
+          });
+        });
         break;
       default:
         break;
@@ -470,8 +830,9 @@ class Statistics extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 170,
-      width: 110,
-      margin: const EdgeInsets.symmetric(horizontal: 5),
+      width: MediaQuery.of(context).size.width *
+          0.2, // Adjusted width for better layout
+      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(35),
         border: Border.all(width: 1.5, color: const Color(0xffD0A6FA)),
@@ -496,10 +857,9 @@ class Statistics extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text(
-                  '${(percentage * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w500, fontSize: 20),
+                const Text(
+                  '\$',
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 20),
                 ),
               ],
             ),
@@ -540,7 +900,11 @@ class QuickActions extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 40,
-              child: SvgPicture.asset(icon),
+              child: SvgPicture.asset(
+                icon,
+                fit: BoxFit.contain,
+                height: 30,
+              ),
             ),
             const Positioned(
               right: -5,

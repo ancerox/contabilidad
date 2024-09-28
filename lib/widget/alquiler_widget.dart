@@ -35,7 +35,7 @@ class AlquilerWidget extends StatefulWidget {
 class _AlquilerWidgetState extends State<AlquilerWidget> {
   late TextEditingController _searchController;
   final ValueNotifier<String> _searchTextNotifier = ValueNotifier('');
-  final Map<String, ValueNotifier<int>> productQuantities = {};
+  final Map<String, ValueNotifier<double>> productQuantities = {};
   final Map<String, ValueNotifier<double>> productTotalPrices = {};
   final ValueNotifier<double> _totalPriceNotifier = ValueNotifier<double>(0);
   late DataBase dataBaseProvider;
@@ -84,9 +84,9 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
     super.dispose();
   }
 
-  void _handleQuantityChanged(String productName, int quantity) {
+  void _handleQuantityChanged(String productName, double quantity) {
     if (productQuantities[productName] == null) {
-      productQuantities[productName] = ValueNotifier<int>(quantity);
+      productQuantities[productName] = ValueNotifier<double>(quantity);
     } else {
       productQuantities[productName]!.value = quantity;
     }
@@ -230,7 +230,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
 
                                   if (productQuantities[product.name] == null) {
                                     productQuantities[product.name] =
-                                        ValueNotifier<int>(0);
+                                        ValueNotifier<double>(0);
                                   }
 
                                   if (productTotalPrices[product.name] ==
@@ -239,7 +239,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                         ValueNotifier<double>(0);
                                   }
 
-                                  return ValueListenableBuilder<int>(
+                                  return ValueListenableBuilder<double>(
                                     valueListenable:
                                         productQuantities[product.name]!,
                                     builder: (context, quantity, child) {
@@ -281,18 +281,6 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
 
                                           // If quantity is 0, remove the product from the list if it exists
                                           if (quantity == 0) {
-                                            if (productExists) {
-                                              _handleQuantityChanged(
-                                                  product.name, quantity);
-                                              List<ProductModel> updatedList =
-                                                  List<ProductModel>.from(
-                                                      currentList);
-                                              // updatedList.removeWhere(
-                                              //     (p) => p.id == product.id);
-                                              dataBaseProvider
-                                                  .selectedProductsNotifier
-                                                  .value = updatedList;
-                                            }
                                             for (var productLooped
                                                 in currentList) {
                                               if (productLooped.id ==
@@ -307,6 +295,8 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                   for (var elementDateRange
                                                       in productLooped
                                                           .datesUsed!) {
+                                                    print("TEASDASDASDS");
+
                                                     if (elementDateRange.id !=
                                                             null &&
                                                         dataBaseProvider
@@ -316,12 +306,27 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                                     .id)) {
                                                       elementDateRange
                                                           .borrowQuantity = 0;
+                                                      print("TEASDASDASDS");
+// // After updating borrowQuantity to 0
+// dataBaseProvider.selectedProductsNotifier.value = List<ProductModel>.from(currentList);
 
                                                       break;
                                                     }
                                                   }
                                                 }
                                               }
+                                            }
+                                            if (productExists) {
+                                              _handleQuantityChanged(
+                                                  product.name, quantity);
+                                              List<ProductModel> updatedList =
+                                                  List<ProductModel>.from(
+                                                      currentList);
+                                              // updatedList.removeWhere(
+                                              //     (p) => p.id == product.id);
+                                              dataBaseProvider
+                                                  .selectedProductsNotifier
+                                                  .value = updatedList;
                                             }
                                             // Remove the product from selectedProductsNotifier
 
@@ -451,7 +456,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                         if (productQuantities[product.name] ==
                                             null) {
                                           productQuantities[product.name] =
-                                              ValueNotifier<int>(0);
+                                              ValueNotifier<double>(0);
                                         }
 
                                         if (productTotalPrices[product.name] ==
@@ -460,7 +465,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                               ValueNotifier<double>(0);
                                         }
 
-                                        return ValueListenableBuilder<int>(
+                                        return ValueListenableBuilder<double>(
                                           valueListenable:
                                               productQuantities[product.name]!,
                                           builder: (context, quantity, child) {
@@ -674,6 +679,8 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                 children: [
                                                   SizedBox(
                                                     child: ListView.builder(
+                                                      physics:
+                                                          const NeverScrollableScrollPhysics(),
                                                       shrinkWrap: true,
                                                       itemCount:
                                                           productList.length,
@@ -787,7 +794,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                                                 color: Colors.black54,
                                                                               ),
                                                                             ),
-                                                                            ValueListenableBuilder<int>(
+                                                                            ValueListenableBuilder<double>(
                                                                               valueListenable: productQuantities[product.name]!,
                                                                               builder: (context, quantity, child) {
                                                                                 return Text(
@@ -871,170 +878,177 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                                                         final product =
                                                             productList[i];
 
-                                                        return Container(
-                                                          margin:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  vertical:
-                                                                      8.0),
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .all(16.0),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: Colors.white,
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        16),
-                                                            boxShadow: [
-                                                              BoxShadow(
-                                                                color: Colors
-                                                                    .grey
-                                                                    .withOpacity(
-                                                                        0.2),
-                                                                spreadRadius: 2,
-                                                                blurRadius: 8,
-                                                                offset:
-                                                                    const Offset(
-                                                                        0, 3),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              Text(
-                                                                product.name,
-                                                                style:
-                                                                    const TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize: 20,
+                                                        if (product.quantity!
+                                                                .value !=
+                                                            0) {
+                                                          return Container(
+                                                            margin:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                                    vertical:
+                                                                        8.0),
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .all(16.0),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color:
+                                                                  Colors.white,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          16),
+                                                              boxShadow: [
+                                                                BoxShadow(
                                                                   color: Colors
-                                                                      .black87,
+                                                                      .grey
+                                                                      .withOpacity(
+                                                                          0.2),
+                                                                  spreadRadius:
+                                                                      2,
+                                                                  blurRadius: 8,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 3),
                                                                 ),
-                                                              ),
-                                                              const SizedBox(
-                                                                  height: 8),
-                                                              Row(
-                                                                mainAxisAlignment:
-                                                                    MainAxisAlignment
-                                                                        .spaceBetween,
-                                                                children: [
-                                                                  Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      Text(
-                                                                        "Precio por ${product.unit.toLowerCase()}",
-                                                                        style:
-                                                                            const TextStyle(
-                                                                          fontSize:
-                                                                              14,
-                                                                          color:
-                                                                              Colors.black54,
-                                                                        ),
-                                                                      ),
-                                                                      Text(
-                                                                        "\$${product.unitPrice.toStringAsFixed(2)}",
-                                                                        style:
-                                                                            const TextStyle(
-                                                                          fontSize:
-                                                                              16,
-                                                                          fontWeight:
-                                                                              FontWeight.bold,
-                                                                          color:
-                                                                              Colors.black87,
-                                                                        ),
-                                                                      ),
-                                                                      const SizedBox(
-                                                                          height:
-                                                                              16),
-                                                                      const Text(
-                                                                        "Cantidad:",
-                                                                        style:
-                                                                            TextStyle(
-                                                                          fontSize:
-                                                                              14,
-                                                                          color:
-                                                                              Colors.black54,
-                                                                        ),
-                                                                      ),
-                                                                      Text(
-                                                                        product
-                                                                            .quantity!
-                                                                            .value
-                                                                            .toString(),
-                                                                        style:
-                                                                            const TextStyle(
-                                                                          fontSize:
-                                                                              16,
-                                                                          fontWeight:
-                                                                              FontWeight.bold,
-                                                                          color:
-                                                                              Colors.black87,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                  Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      const SizedBox(
-                                                                          height:
-                                                                              16),
-                                                                      const Text(
-                                                                        "Precio total:",
-                                                                        style:
-                                                                            TextStyle(
-                                                                          fontSize:
-                                                                              14,
-                                                                          color:
-                                                                              Colors.black54,
-                                                                        ),
-                                                                      ),
-                                                                      Text(
-                                                                        (product.quantity!.value *
-                                                                                product.unitPrice)
-                                                                            .toStringAsFixed(2),
-                                                                        style:
-                                                                            const TextStyle(
-                                                                          fontSize:
-                                                                              16,
-                                                                          fontWeight:
-                                                                              FontWeight.bold,
-                                                                          color:
-                                                                              Colors.green,
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                              const SizedBox(
-                                                                  height: 16),
-                                                              const Center(
-                                                                child: Text(
-                                                                  "Costo adicional",
+                                                              ],
+                                                            ),
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Text(
+                                                                  product.name,
                                                                   style:
-                                                                      TextStyle(
+                                                                      const TextStyle(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
                                                                     fontSize:
-                                                                        14,
+                                                                        20,
                                                                     color: Colors
-                                                                        .black54,
+                                                                        .black87,
                                                                   ),
                                                                 ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        );
+                                                                const SizedBox(
+                                                                    height: 8),
+                                                                Row(
+                                                                  mainAxisAlignment:
+                                                                      MainAxisAlignment
+                                                                          .spaceBetween,
+                                                                  children: [
+                                                                    Column(
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment
+                                                                              .start,
+                                                                      children: [
+                                                                        Text(
+                                                                          "Precio por ${product.unit.toLowerCase()}",
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontSize:
+                                                                                14,
+                                                                            color:
+                                                                                Colors.black54,
+                                                                          ),
+                                                                        ),
+                                                                        Text(
+                                                                          "\$${product.unitPrice.toStringAsFixed(2)}",
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontSize:
+                                                                                16,
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                            color:
+                                                                                Colors.black87,
+                                                                          ),
+                                                                        ),
+                                                                        const SizedBox(
+                                                                            height:
+                                                                                16),
+                                                                        const Text(
+                                                                          "Cantidad:",
+                                                                          style:
+                                                                              TextStyle(
+                                                                            fontSize:
+                                                                                14,
+                                                                            color:
+                                                                                Colors.black54,
+                                                                          ),
+                                                                        ),
+                                                                        Text(
+                                                                          product
+                                                                              .quantity!
+                                                                              .value
+                                                                              .toString(),
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontSize:
+                                                                                16,
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                            color:
+                                                                                Colors.black87,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                    Column(
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment
+                                                                              .start,
+                                                                      children: [
+                                                                        const SizedBox(
+                                                                            height:
+                                                                                16),
+                                                                        const Text(
+                                                                          "Precio total:",
+                                                                          style:
+                                                                              TextStyle(
+                                                                            fontSize:
+                                                                                14,
+                                                                            color:
+                                                                                Colors.black54,
+                                                                          ),
+                                                                        ),
+                                                                        Text(
+                                                                          (product.quantity!.value * product.unitPrice)
+                                                                              .toStringAsFixed(2),
+                                                                          style:
+                                                                              const TextStyle(
+                                                                            fontSize:
+                                                                                16,
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                            color:
+                                                                                Colors.green,
+                                                                          ),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                                const SizedBox(
+                                                                    height: 16),
+                                                                const Center(
+                                                                  child: Text(
+                                                                    "Costo adicional",
+                                                                    style:
+                                                                        TextStyle(
+                                                                      fontSize:
+                                                                          14,
+                                                                      color: Colors
+                                                                          .black54,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          );
+                                                        }
+                                                        return null;
                                                       },
                                                     ),
                                                   ),

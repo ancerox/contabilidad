@@ -53,7 +53,7 @@ class _CreateProductPageState extends State<CreateProductPage> {
   DateTime? _startDay;
   DateTime? _endDay;
   DateTime? _selectedDay;
-  RangeSelectionMode _rangeSelectionMode =
+  final RangeSelectionMode _rangeSelectionMode =
       RangeSelectionMode.toggledOff; // Can be toggled on or off
 
   ValueNotifier<int> quantity = ValueNotifier<int>(0);
@@ -136,8 +136,8 @@ class _CreateProductPageState extends State<CreateProductPage> {
           name: _nameController.text,
           cost: _costController.text.isEmpty
               ? 0
-              : int.parse(_costController.text) ?? 0,
-          amount: int.tryParse(_amountController.text) ?? 0,
+              : double.parse(_costController.text) ?? 0,
+          amount: double.tryParse(_amountController.text) ?? 0,
           unitPrice: double.tryParse(_unitPriceController.text) ?? 0.0,
           unit: _selectedUnit ?? 'Unidad',
           productType: _selectedValue,
@@ -183,9 +183,9 @@ class _CreateProductPageState extends State<CreateProductPage> {
   Widget build(BuildContext context) {
     if (databaseProvider.selectedCommodities.value.isNotEmpty) {
       if (widget.product == null || widget.product!.costModified == false) {
-        int totalCost = databaseProvider.selectedCommodities.value.fold(
+        double totalCost = databaseProvider.selectedCommodities.value.fold(
             0,
-            (int sum, ProductModel product) =>
+            (double sum, ProductModel product) =>
                 sum + product.cost.toInt() * product.quantity!.value);
 
         _costController.text = totalCost.toString();
@@ -422,98 +422,98 @@ class _CreateProductPageState extends State<CreateProductPage> {
                         // return null;
                       },
                     ),
-              _selectedValueProductCategory == "En alquiler"
-                  ? TableCalendar(
-                      enabledDayPredicate: (day) {
-                        // Disable selection of days within any of the unavailable ranges
-                        for (var range in dateRanges) {
-                          if ((range.start != null && range.end != null) &&
-                              (day.isAfter(range.start!
-                                      .subtract(const Duration(days: 1))) &&
-                                  day.isBefore(range.end!
-                                      .add(const Duration(days: 1))))) {
-                            return false; // This day should not be selectable
-                          }
-                        }
-                        return true; // Other days are selectable
-                      },
-                      headerStyle: const HeaderStyle(
-                        formatButtonVisible: false,
-                        titleCentered: true,
-                        leftChevronVisible: true,
-                        rightChevronVisible: true,
-                      ),
-                      calendarBuilders: CalendarBuilders(
-                        defaultBuilder: (context, day, focusedDay) {
-                          if (dateRanges.any((markedDate) =>
-                              isSameDay(markedDate.start, markedDate.end))) {
-                            // This day will have custom styling
-                            return Container(
-                              margin: const EdgeInsets.all(4.0),
-                              alignment: Alignment.center,
-                              decoration: const BoxDecoration(
-                                color: Colors.blue,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                day.day.toString(),
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                            );
-                          } else {
-                            // Return null for default styling
-                            return null;
-                          }
-                        },
-                      ),
-                      firstDay: DateTime.utc(2010, 10, 16),
-                      lastDay: DateTime.utc(2030, 3, 14),
-                      focusedDay: _focusedDay,
-                      rangeSelectionMode: _rangeSelectionMode,
-                      // selectedDayPredicate: (day) {
-                      //   return isSameDay(_selectedDay, day);
-                      // },
-                      rangeStartDay: _startDay,
-                      rangeEndDay: _endDay,
-                      onDaySelected: (selectedDay, focusedDay) {
-                        if (_startDay != null &&
-                            selectedDay.isAfter(_startDay!) &&
-                            _endDay == null) {
-                          // End date is not set yet
-                          setState(() {
-                            _endDay = selectedDay;
-                            _focusedDay = focusedDay;
-                            _rangeSelectionMode = RangeSelectionMode.toggledOn;
-                            markdateRanges
-                                .add(DateRange(start: _startDay, end: _endDay));
-                          });
-                        } else {
-                          setState(() {
-                            _selectedDay = selectedDay;
-                            _startDay = selectedDay;
-                            _endDay = null;
-                            _focusedDay = focusedDay;
-                            _rangeSelectionMode = RangeSelectionMode.toggledOff;
-                          });
-                        }
-                      },
-                      onPageChanged: (focusedDay) {
-                        _focusedDay = focusedDay;
-                      },
-                      calendarStyle: CalendarStyle(
-                        // Customize range style
-                        rangeHighlightColor: Colors.black.withOpacity(0.6),
-                        rangeStartDecoration: const BoxDecoration(
-                          color: Colors.black,
-                          shape: BoxShape.circle,
-                        ),
-                        rangeEndDecoration: const BoxDecoration(
-                          color: Colors.black,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    )
-                  : Container(),
+              // _selectedValueProductCategory == "En alquiler"
+              //     ? TableCalendar(
+              //         enabledDayPredicate: (day) {
+              //           // Disable selection of days within any of the unavailable ranges
+              //           for (var range in dateRanges) {
+              //             if ((range.start != null && range.end != null) &&
+              //                 (day.isAfter(range.start!
+              //                         .subtract(const Duration(days: 1))) &&
+              //                     day.isBefore(range.end!
+              //                         .add(const Duration(days: 1))))) {
+              //               return false; // This day should not be selectable
+              //             }
+              //           }
+              //           return true; // Other days are selectable
+              //         },
+              //         headerStyle: const HeaderStyle(
+              //           formatButtonVisible: false,
+              //           titleCentered: true,
+              //           leftChevronVisible: true,
+              //           rightChevronVisible: true,
+              //         ),
+              //         calendarBuilders: CalendarBuilders(
+              //           defaultBuilder: (context, day, focusedDay) {
+              //             if (dateRanges.any((markedDate) =>
+              //                 isSameDay(markedDate.start, markedDate.end))) {
+              //               // This day will have custom styling
+              //               return Container(
+              //                 margin: const EdgeInsets.all(4.0),
+              //                 alignment: Alignment.center,
+              //                 decoration: const BoxDecoration(
+              //                   color: Colors.blue,
+              //                   shape: BoxShape.circle,
+              //                 ),
+              //                 child: Text(
+              //                   day.day.toString(),
+              //                   style: const TextStyle(color: Colors.white),
+              //                 ),
+              //               );
+              //             } else {
+              //               // Return null for default styling
+              //               return null;
+              //             }
+              //           },
+              //         ),
+              //         firstDay: DateTime.utc(2010, 10, 16),
+              //         lastDay: DateTime.utc(2030, 3, 14),
+              //         focusedDay: _focusedDay,
+              //         rangeSelectionMode: _rangeSelectionMode,
+              //         // selectedDayPredicate: (day) {
+              //         //   return isSameDay(_selectedDay, day);
+              //         // },
+              //         rangeStartDay: _startDay,
+              //         rangeEndDay: _endDay,
+              //         onDaySelected: (selectedDay, focusedDay) {
+              //           if (_startDay != null &&
+              //               selectedDay.isAfter(_startDay!) &&
+              //               _endDay == null) {
+              //             // End date is not set yet
+              //             setState(() {
+              //               _endDay = selectedDay;
+              //               _focusedDay = focusedDay;
+              //               _rangeSelectionMode = RangeSelectionMode.toggledOn;
+              //               markdateRanges
+              //                   .add(DateRange(start: _startDay, end: _endDay));
+              //             });
+              //           } else {
+              //             setState(() {
+              //               _selectedDay = selectedDay;
+              //               _startDay = selectedDay;
+              //               _endDay = null;
+              //               _focusedDay = focusedDay;
+              //               _rangeSelectionMode = RangeSelectionMode.toggledOff;
+              //             });
+              //           }
+              //         },
+              //         onPageChanged: (focusedDay) {
+              //           _focusedDay = focusedDay;
+              //         },
+              //         calendarStyle: CalendarStyle(
+              //           // Customize range style
+              //           rangeHighlightColor: Colors.black.withOpacity(0.6),
+              //           rangeStartDecoration: const BoxDecoration(
+              //             color: Colors.black,
+              //             shape: BoxShape.circle,
+              //           ),
+              //           rangeEndDecoration: const BoxDecoration(
+              //             color: Colors.black,
+              //             shape: BoxShape.circle,
+              //           ),
+              //         ),
+              //       )
+              // : Container(),
               TextFormField(
                 controller: _costController,
                 decoration: const InputDecoration(labelText: 'Costo'),

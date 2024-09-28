@@ -22,7 +22,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   final Map<String, TextEditingController> _quantityControllers = {};
   final Map<String, TextEditingController> _costCTRController = {};
-  final Map<String, ValueNotifier<int>> productQuantities = {};
+  final Map<String, ValueNotifier<double>> productQuantities = {};
   final Map<String, ValueNotifier<int>> productCosts = {};
   ValueNotifier<bool> isCheckoutButtonEnabled = ValueNotifier(false);
   List<ProductModel> selectedProducts = [];
@@ -35,7 +35,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     super.initState();
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
     getProducts();
-    // _searchController.addListener(_filterProducts);
+    _searchController.addListener(_filterProducts);
     selectedItemNotifier.addListener(
         _filterProducts); // Escuchar cambios en el filtro seleccionado
   }
@@ -81,7 +81,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       print("${product.cost} testtt");
       final productId = product.id.toString();
 
-      productQuantities[productId] = ValueNotifier<int>(0);
+      productQuantities[productId] = ValueNotifier<double>(0);
       productCosts[productId] = ValueNotifier<int>(product.cost.toInt());
       _quantityControllers[productId] = TextEditingController();
       _costCTRController[productId] = TextEditingController();
@@ -94,13 +94,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   bool _isCheckoutEnabled() {
-    int totalQuantity = productQuantities.values
+    double totalQuantity = productQuantities.values
         .fold(0, (sum, notifier) => sum + notifier.value);
     return totalQuantity > 0;
   }
 
   void _updateSelectedProductQuantity(
-      ProductModel product, int change, bool isOverwrite) {
+      ProductModel product, double change, bool isOverwrite) {
     final existingProduct = selectedProducts.firstWhere(
         (p) => p.id == product.id,
         orElse: () => ProductModel(
@@ -114,9 +114,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
             file: product.file,
             productCategory: product.productCategory,
             productType: product.productType,
-            quantity: ValueNotifier<int>(0)));
+            quantity: ValueNotifier<double>(0)));
 
-    int updatedQuantity = existingProduct.quantity!.value + change;
+    double updatedQuantity = existingProduct.quantity!.value + change;
     if (isOverwrite) {
       updatedQuantity = change;
     }
@@ -139,7 +139,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final double screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text("Escoge un producto"),
       ),
@@ -222,90 +222,108 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
             Expanded(
-              child: ListView.builder(
-                itemCount: filteredProducts.length,
-                itemBuilder: (context, index) {
-                  final product = filteredProducts[index];
-                  final productId = product.id.toString();
+              child: SingleChildScrollView(
+                child: ListView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filteredProducts.length,
+                  shrinkWrap: true,
+                  itemBuilder: (context, index) {
+                    final product = filteredProducts[index];
+                    final productId = product.id.toString();
 
-                  if (!productQuantities.containsKey(productId)) {
-                    productQuantities[productId] = ValueNotifier<int>(0);
-                  }
-                  if (!productCosts.containsKey(productId)) {
-                    productCosts[productId] =
-                        ValueNotifier<int>(product.cost.toInt());
-                  }
+                    if (!productQuantities.containsKey(productId)) {
+                      productQuantities[productId] = ValueNotifier<double>(0);
+                    }
+                    if (!productCosts.containsKey(productId)) {
+                      productCosts[productId] =
+                          ValueNotifier<int>(product.cost.toInt());
+                    }
 
-                  final quantityController = _quantityControllers[productId] ??
-                      TextEditingController();
-                  final costCTRController =
-                      _costCTRController[productId] ?? TextEditingController();
+                    final quantityController =
+                        _quantityControllers[productId] ??
+                            TextEditingController();
+                    final costCTRController = _costCTRController[productId] ??
+                        TextEditingController();
 
-                  costCTRController.text = product.cost.toString();
-                  print("${product.cost} test123123");
-                  quantityController.text =
-                      productQuantities[productId]!.value.toString();
+                    costCTRController.text = product.cost.toString();
+                    print("${product.cost} test123123");
 
-                  return GestureDetector(
-                    onTap: () async {
-                      // Handle tap
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: ValueListenableBuilder<int>(
-                        valueListenable: productCosts[productId]!,
-                        builder: (context, costValue, child) {
-                          return Item(
-                            costOnChange: (String value) {
-                              if (value.isNotEmpty) {
-                                productCosts[productId]!.value =
-                                    int.parse(value);
+                    return GestureDetector(
+                      onTap: () async {
+                        // Handle tap
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: productCosts[productId]!,
+                          builder: (context, costValue, child) {
+                            return Item(
+                              subProducts: product.subProduct,
+                              costOnChange: (String value) {
+                                if (value.isNotEmpty) {
+                                  productCosts[productId]!.value =
+                                      int.parse(value);
 
-                                //
-                                product.cost = productCosts[productId]!.value;
-                              }
-                            },
-                            quantityOnChange: (String value) {
-                              if (value == "") {
-                                return;
-                              }
-                              productQuantities[productId]!.value =
-                                  int.parse(value);
-                              _updateCheckoutButtonState();
+                                  //
+                                  product.cost =
+                                      productCosts[productId]!.value.toDouble();
+                                }
+                              },
+                              quantityOnChange: (String value) {
+                                if (value == "") {
+                                  return;
+                                }
+                                productQuantities[productId]!.value =
+                                    double.parse(value);
+                                _updateCheckoutButtonState();
 
-                              _updateSelectedProductQuantity(product,
-                                  int.parse(quantityController.text), true);
-                            },
-                            quantityCTRController: quantityController,
-                            costCTRController: costCTRController,
-                            cost: productCosts[productId]!.value.toInt(),
-                            quantity: productQuantities[productId]!,
-                            minus: () {
-                              if (productQuantities[productId]!.value == 0) {
-                                return;
-                              }
-                              productQuantities[productId]!.value--;
-                              _updateCheckoutButtonState();
-                              _updateSelectedProductQuantity(
-                                  product, -1, false);
-                            },
-                            plus: () {
-                              productQuantities[productId]!.value++;
-                              _updateCheckoutButtonState();
-                              _updateSelectedProductQuantity(product, 1, false);
-                            },
-                            hasTrailing: true,
-                            magnitud: product.unit,
-                            amount: product.amount,
-                            name: product.name,
-                            precio: product.unitPrice,
-                            imagePath: product.file!,
-                          );
-                        },
+                                _updateSelectedProductQuantity(
+                                    product,
+                                    double.parse(quantityController.text),
+                                    true);
+                              },
+                              quantityCTRController: quantityController,
+                              costCTRController: costCTRController,
+                              cost: productCosts[productId]!.value.toInt(),
+                              quantity: productQuantities[productId]!,
+                              minus: () {
+                                if (productQuantities[productId]!.value <= 0) {
+                                  quantityController.text = 0.0.toString();
+
+                                  return;
+                                }
+                                productQuantities[productId]!.value--;
+                                _updateCheckoutButtonState();
+                                _updateSelectedProductQuantity(
+                                    product, -1, false);
+                                quantityController.text =
+                                    productQuantities[productId]!
+                                        .value
+                                        .toString();
+                              },
+                              plus: () {
+                                productQuantities[productId]!.value++;
+                                _updateCheckoutButtonState();
+                                _updateSelectedProductQuantity(
+                                    product, 1, false);
+                                quantityController.text =
+                                    productQuantities[productId]!
+                                        .value
+                                        .toString();
+                              },
+                              hasTrailing: true,
+                              magnitud: product.unit,
+                              amount: product.amount,
+                              name: product.name,
+                              precio: product.unitPrice,
+                              imagePath: product.file!,
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
             Container(

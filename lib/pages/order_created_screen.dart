@@ -217,7 +217,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                               clientName: widget.orderModel.clientName,
                               celNumber: "",
                               direccion: "",
-                              date: DateTime.now().toString(),
+                              date: pago.date,
                               comment: "",
                               totalCost: pago.amount,
                             ),
@@ -237,8 +237,8 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                         // If the order does not exist or pagos list is empty, proceed to add pagos
 
                         for (var pago in widget.orderModel.pagos) {
-                          if (!matchingOrder.pagos
-                              .any((existingPago) => existingPago == pago)) {
+                          if (!matchingOrder.pagos.any(
+                              (existingPago) => existingPago.id == pago.id)) {
                             // Only create the pago if it doesn't exist in the current order's pagos
                             await dataBaseProvider.createOrderWithProducts(
                               OrderModel(
@@ -251,7 +251,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                 clientName: widget.orderModel.clientName,
                                 celNumber: "",
                                 direccion: "",
-                                date: DateTime.now().toString(),
+                                date: pago.date,
                                 comment: "",
                                 totalCost: pago.amount,
                               ),
@@ -267,33 +267,58 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                       }
                     }
 
+                    /// EDIT ORDERS AND STOCK
                     if (widget.isEditPage) {
                       List<OrderModel> existingOrders =
                           await dataBaseProvider.getAllOrdersWithProducts();
+                      List<ProductModel> existingProducts =
+                          await dataBaseProvider.obtenerProductos();
 
-                      existingOrders = existingOrders
-                          .where(
-                            (order) =>
-                                order.orderId.isNotEmpty &&
-                                widget.orderModel.orderId.isNotEmpty &&
-                                order.orderId
-                                        .substring(order.orderId.length - 1) ==
-                                    widget.orderModel.orderId.substring(
-                                        widget.orderModel.orderId.length - 1),
-                            // orElse: () => throw Exception('Order not found'),
-                          )
-                          .toList();
+                      // Restore Stock
+                      for (var element in widget.orderModel.productList!) {
+                        if (element.datesUsed == null ||
+                            element.datesUsed!.isEmpty) {
+                          final ordercostOfOrder = existingProducts.firstWhere(
+                              (eleProduct) => eleProduct.id == element.id!);
+                          double diference = 0.0;
+                          if (element.initialQuantity != null) {
+                            diference = element.initialQuantity! -
+                                element.quantity!.value;
+                          }
+
+                          print("${element.initialQuantity} teasdasd233");
+                          print("${element.quantity!.value} teasdasd233");
+                          dataBaseProvider.updateProductAmount(element.id!,
+                              ordercostOfOrder.amount + (diference));
+                          element.initialQuantity =
+                              element.quantity!.value.toInt();
+                          print("${ordercostOfOrder.amount} teasdasd233");
+                          print("$diference teasdasd233");
+                          // if (element.quantity!.value >
+                          //     element.initialQuantity!) {
+
+                          // }
+                          // if (element.quantity!.value <
+                          //     element.initialQuantity!) {
+                          //   dataBaseProvider.updateProductAmount(
+                          //       element.id!,
+                          //       element.amount -
+                          //           (element.quantity!.value) -
+                          //           (element.initialQuantity!));
+                          // }
+                        }
+                      }
 
                       final ordercostOfOrder = existingOrders.firstWhere(
-                          (element) => element.status == "Costo de orden");
+                          (element) =>
+                              element.status == "Costo de orden" &&
+                              element.orderId == widget.orderModel.orderId);
+
                       // final orderPagoAmount = existingOrders
                       //     .firstWhere((element) => element.status == "Pago");
 
-                      ordercostOfOrder.totalCost = widget.orderModel.totalCost +
-                          dataBaseProvider.selectedCommodities.value.fold(
-                              0,
-                              (previousValue, element) =>
-                                  element.quantity!.value * element.cost);
+                      ordercostOfOrder.totalCost =
+                          widget.orderModel.totalCostSpent!.toDouble();
                       await dataBaseProvider.updateOrderWithProducts(
                           ordercostOfOrder.id.toString(),
                           ordercostOfOrder,
@@ -331,6 +356,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                       return;
                     }
                     final cobroOrder = OrderModel(
+                      totalCostSpent: widget.orderModel.totalCostSpent,
                       orderId: widget.orderModel.orderId,
                       pagos: [],
                       totalOwned: "",
@@ -339,17 +365,11 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                       clientName: widget.orderModel.clientName,
                       celNumber: "",
                       direccion: "",
-                      date: DateTime.now().toString(),
+                      date: DateFormat('MM/dd/yyyy')
+                          .format(DateTime.now())
+                          .toString(),
                       comment: "",
-                      totalCost: widget.productModelList.fold(
-                              0,
-                              (previousValue, element) =>
-                                  element.quantity!.value * element.cost) +
-                          dataBaseProvider.selectedCommodities.value.fold(
-                              0,
-                              (previousValue, element) =>
-                                  element.quantity!.value *
-                                  element.cost.toDouble()),
+                      totalCost: widget.orderModel.totalCostSpent!.toDouble(),
                     );
                     await dataBaseProvider.createOrderWithProducts(
                         widget.orderModel, widget.productModelList);
@@ -450,6 +470,13 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
       OrderModel order, List<ProductModel> products) async {
     final pdf = pw.Document();
 
+    products =
+        products.where((element) => element.quantity!.value > 0).toList();
+    List<ProductModel> productsCommodities = dataBaseProvider
+        .selectedCommodities.value
+        .where((element) => element.quantity!.value > 0)
+        .toList();
+
     pdf.addPage(
       pw.Page(
         build: (pw.Context context) {
@@ -529,7 +556,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                     // pw.Divider(),
                     style: const pw.TextStyle(fontSize: 18)),
               pw.ListView.builder(
-                itemCount: dataBaseProvider.selectedCommodities.value.length,
+                itemCount: productsCommodities.length,
                 itemBuilder: (context, index) {
                   final product =
                       dataBaseProvider.selectedCommodities.value[index];
@@ -596,20 +623,29 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                 ],
               ),
               pw.SizedBox(height: 8),
+
+              pw.SizedBox(height: 8),
               pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                // mainAxisAlignment: pw
+                //     .MainAxisAlignment.spaceBetween, // Distribute space evenly
+                crossAxisAlignment:
+                    pw.CrossAxisAlignment.center, // Align the items at the top
                 children: [
-                  pw.Text('Comentario'),
-                  pw.Text(order.comment),
+                  pw.Text('Comentario: ',
+                      maxLines: 1), // The label stays fixed in its space
+                  pw.SizedBox(
+                      width: 10), // Optional space between label and text
+                  pw.Expanded(
+                    child: pw.Text(
+                      order.comment,
+                      textAlign: pw.TextAlign.left, // Ensure text is justified
+                      overflow: pw.TextOverflow.clip, // Clip the overflow
+                    ),
+                  ),
                 ],
               ),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Vendido por'),
-                  pw.Text("Freedy Elias"),
-                ],
-              ),
+
+              pw.SizedBox(height: 8),
             ],
           );
         },

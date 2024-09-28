@@ -57,7 +57,10 @@ class OrderProvider extends ChangeNotifier {
           "Order ID: ${order.id}, Status: ${order.status}, Product List: ${order.productList?.length ?? 0}");
 
       // Ensure orders with status 'Pago' are only shown in 'Transacciones'
-      if (order.status == 'Pago' || order.status == "Costo de orden") {
+      if (order.status == 'Pago' ||
+          order.status == "Costo de orden" ||
+          order.status == "Produccion" ||
+          order.status == "Gasto") {
         if (_selectedStatus == 'Transacciones') {
           print("Showing 'Pago' order in Transacciones.");
           return true;
@@ -208,7 +211,10 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Historial de Órdenes'),
+        title: const Text(
+          'Historial de Órdenes',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color(0xffA338FF),
         actions: [
           IconButton(
@@ -499,7 +505,9 @@ class _InvoiceWidgetState extends State<InvoiceWidget> {
                     widget.order.productList?.isEmpty == true
                 ? Container()
                 : widget.order.status == "Pago" ||
-                        widget.order.status == "Costo de orden"
+                        widget.order.status == "Costo de orden" ||
+                        widget.order.status == "Produccion" ||
+                        widget.order.status == "Gasto"
                     ? Container()
                     : ItemListSection(
                         products: widget.products,
@@ -677,14 +685,30 @@ class ItemListSection extends StatelessWidget {
         children: [
           TotalRow(label: 'Total Adeudado', amount: order.totalOwned),
           for (var product in products)
-            ItemRow(
-              products: products ?? [],
-              image: product.file!,
-              title: product.name,
-              quantity: product.quantity!.value,
-              cost: product.cost,
-              unit: product.unit,
+            if (product.quantity!.value > 0)
+              ItemRow(
+                product: product,
+                image: product.file!,
+                title: product.name,
+                quantity: product.quantity!.value.toInt(),
+                cost: product.cost.toInt(),
+                unit: product.unit,
+              ),
+          if (order.adminExpenses != null && order.adminExpenses!.isNotEmpty)
+            const Text(
+              "Costos adicionales",
+              style: TextStyle(color: Color.fromARGB(255, 111, 111, 111)),
             ),
+          if (order.adminExpenses != null && order.adminExpenses!.isNotEmpty)
+            for (var product in order.adminExpenses!)
+              ItemRow(
+                product: product,
+                image: product.file!,
+                title: product.name,
+                quantity: product.quantity!.value.toInt(),
+                cost: product.cost.toInt(),
+                unit: product.unit,
+              ),
         ],
       ),
     );
@@ -692,7 +716,7 @@ class ItemListSection extends StatelessWidget {
 }
 
 class ItemRow extends StatefulWidget {
-  final List<ProductModel> products;
+  final ProductModel product;
   final String image;
   final String title;
   final int quantity;
@@ -701,7 +725,7 @@ class ItemRow extends StatefulWidget {
 
   const ItemRow({
     super.key,
-    required this.products,
+    required this.product,
     required this.title,
     required this.image,
     required this.quantity,
@@ -750,8 +774,8 @@ class _ItemRowState extends State<ItemRow> {
                     setState(() {});
                   },
                   child: SizedBox(
-                    width:
-                        200, // constraints the width to the maximum available
+                    width: MediaQuery.of(context).size.width *
+                        0.65, // constraints the width to the maximum available
                     child: Row(
                       children: [
                         Expanded(
@@ -760,39 +784,37 @@ class _ItemRowState extends State<ItemRow> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        for (var product in widget.products)
-                          if (product.subProduct != null &&
-                              product.subProduct!.isNotEmpty)
-                            const Icon(
-                              Icons.arrow_drop_down,
-                              color: Colors.grey,
-                            ),
+                        if (widget.product.subProduct!.isNotEmpty)
+                          const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.grey,
+                          ),
                       ],
                     ),
                   )),
             ],
           ),
           if (isSubProduct == true)
-            for (var product in widget.products)
-              if (product.subProduct != null && product.subProduct!.isNotEmpty)
-                ...product.subProduct!.map((subproduct) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 70),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${subproduct.quantity!.value} x ${subproduct.name}',
-                          style: const TextStyle(fontStyle: FontStyle.italic),
-                        ),
-                        Text(
-                          '  \$${subproduct.cost}',
-                          style: const TextStyle(fontStyle: FontStyle.italic),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+            if (widget.product.subProduct != null &&
+                widget.product.subProduct!.isNotEmpty)
+              ...widget.product.subProduct!.map((subproduct) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 70),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${subproduct.quantity!.value} x ${subproduct.name}',
+                        style: const TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                      Text(
+                        '  \$${subproduct.cost}',
+                        style: const TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ),
+                );
+              }),
         ],
       ),
     );
@@ -816,7 +838,9 @@ class TotalSection extends StatelessWidget {
     if (order.status == "Pago" ||
         order.status == "Compra" ||
         order.status == "Pago bigticket" ||
-        order.status == "Costo de orden") {
+        order.status == "Costo de orden" ||
+        order.status == "Produccion" ||
+        order.status == "Gasto") {
       return Container(
         decoration: BoxDecoration(
           border: Border.all(color: const Color(0xffA338FF), width: 0.4),
@@ -833,16 +857,22 @@ class TotalSection extends StatelessWidget {
     }
 
     // Regular calculation for other statuses
-    int adminCost = order.adminExpenses!.fold(
+    double adminCost = order.adminExpenses!.fold(
         0,
-        (int sum, ProductModel product) =>
+        (double sum, ProductModel product) =>
             sum + product.cost.toInt() * product.quantity!.value);
-    int adminPrice = order.adminExpenses!.fold(
+    double adminPrice = order.adminExpenses!.fold(
         0,
-        (int sum, ProductModel product) =>
+        (double sum, ProductModel product) =>
             sum + product.unitPrice.toInt() * product.quantity!.value);
 
-    final newMargen = double.parse(order.margen) + adminCost;
+    double newMargen = double.parse(order.margen) + adminCost;
+    if (order.margen == "0.0") {
+      newMargen = order.productList!.fold(
+          0,
+          (previousValue, element) =>
+              previousValue + (element.unitPrice - element.cost) + adminCost);
+    }
 
     return Container(
       decoration: BoxDecoration(

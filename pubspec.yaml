@@ -51,14 +51,15 @@ dependencies:
   uuid:
   pay: ^1.0.10
   csv: ^5.0.0
-  excel: ^2.0.5
+  excel: 
   share_plus: ^6.0.5
   shared_preferences: ^2.2.3
   firebase_core: 
   firebase_auth:  # If you need Firebase Authentication
   cloud_firestore:  # If you need Firestore
   firebase_database: 
-  fl_chart: 
+  fl_chart:
+  syncfusion_flutter_charts: ^20.1.55
 
 
 dev_dependencies:

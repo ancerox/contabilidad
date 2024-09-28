@@ -137,8 +137,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
                               pw.Text('Recibo de Compra',
                                   style: const pw.TextStyle(fontSize: 24)),
                               pw.SizedBox(height: 8),
-                              pw.Text(
-                                  'Gracias por tu compra, ${order.clientName}'),
+                              pw.Text('Gracias por tu compra'),
                               pw.SizedBox(height: 8),
                               pw.Text(
                                   'Este es el recibo de la compra de tu producto.'),
@@ -232,11 +231,26 @@ class _ReceiptPageState extends State<ReceiptPage> {
                               ),
                               pw.SizedBox(height: 8),
                               pw.Row(
-                                mainAxisAlignment:
-                                    pw.MainAxisAlignment.spaceBetween,
+                                // mainAxisAlignment: pw
+                                //     .dMainAxisAlignment.spaceBetween, // Distribute space evenly
+                                crossAxisAlignment: pw.CrossAxisAlignment
+                                    .center, // Align the items at the top
                                 children: [
-                                  pw.Text('Comentario'),
-                                  pw.Text(order.clientName),
+                                  pw.Text('Comentario:${order.clientName}',
+                                      maxLines:
+                                          1), // The label stays fixed in its space
+                                  pw.SizedBox(
+                                      width:
+                                          10), // Optional space between label and text
+                                  pw.Expanded(
+                                    child: pw.Text(
+                                      order.comment,
+                                      textAlign: pw.TextAlign
+                                          .left, // Ensure text is justified
+                                      overflow: pw.TextOverflow
+                                          .clip, // Clip the overflow
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -332,11 +346,11 @@ class _ReceiptPageState extends State<ReceiptPage> {
           product.productType == "Gasto administrativo") {
         continue;
       } else {
-        int newAmount = product.amount + product.quantity!.value;
+        double newAmount = product.amount + product.quantity!.value;
         product.amount = newAmount;
 
         // Reset quantity to 0 after updating the amount
-        int quantityUsed = product.quantity!.value;
+        double quantityUsed = product.quantity!.value;
         product.quantity = ValueNotifier(0);
         await dataBase.updateProduct(product);
 
@@ -346,7 +360,8 @@ class _ReceiptPageState extends State<ReceiptPage> {
                 await dataBase.getProductById(subProduct.id!);
             if (subProductFromDb != null &&
                 subProductFromDb.productType == "Materia prima") {
-              int newSubProductAmount = subProductFromDb.amount - quantityUsed;
+              double newSubProductAmount = subProductFromDb.amount -
+                  subProduct.quantity!.value * quantityUsed;
               subProductFromDb.amount = newSubProductAmount;
 
               // Reset sub-product quantity to 0
@@ -369,7 +384,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
       clientName: concepto,
       celNumber: '',
       direccion: '',
-      date: DateTime.now().toString(),
+      date: DateFormat('MM/dd/yyyy').format(DateTime.now()).toString(),
       comment: "",
       totalCost: productsForOrder.fold(
           0, (sum, item) => sum + (item.cost * item.quantity!.value)),
@@ -387,7 +402,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
       clientName: concepto,
       celNumber: '',
       direccion: '',
-      date: DateTime.now().toString(),
+      date: DateFormat('MM/dd/yyyy').format(DateTime.now()).toString(),
       comment: "",
       totalCost: productsForOrder.fold(
           0, (sum, item) => sum + (item.cost * item.quantity!.value)),
@@ -395,9 +410,29 @@ class _ReceiptPageState extends State<ReceiptPage> {
       margen: '',
       totalOwned: '',
     );
+    OrderModel orderProduccion = OrderModel(
+      orderId: "COMPRA $countDB",
+      productList: productsForOrder,
+      pagos: [],
+      orderNumber: "",
+      clientName: concepto,
+      celNumber: '',
+      direccion: '',
+      date: DateFormat('MM/dd/yyyy').format(DateTime.now()).toString(),
+      comment: "",
+      totalCost: productsForOrder.fold(
+          0, (sum, item) => sum + (item.cost * item.quantity!.value) * -1),
+      status: 'Produccion',
+      margen: 'test',
+      totalOwned: '',
+    );
 
     await dataBase.createOrderWithProducts(orderTra, []);
     await dataBase.createOrderWithProducts(order, productsForOrder);
+    if (productsForOrder.any((element) =>
+        element.subProduct != null && element.subProduct!.isNotEmpty)) {
+      await dataBase.createOrderWithProducts(orderProduccion, productsForOrder);
+    }
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const HomePage()),

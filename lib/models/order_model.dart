@@ -45,7 +45,7 @@ class PagoModel {
 class OrderModel {
   int? totalCostSpent;
   final String? orderNumber;
-  final String totalOwned;
+  String totalOwned;
   final String margen;
   int? id;
   String orderId;

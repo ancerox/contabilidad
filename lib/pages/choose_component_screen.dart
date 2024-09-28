@@ -28,7 +28,7 @@ class ProductNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setQuantity(int value) {
+  void setQuantity(double value) {
     product.quantity!.value = value;
     notifyListeners();
   }
@@ -69,6 +69,12 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
             product.productType.contains(selectedItemNotifier.value))
         .map((product) => ProductNotifier(product))
         .toList();
+    for (var product in productList) {
+      print("${product.cost} testtt");
+      final productId = product.id.toString();
+
+      _costCTRController[productId] = TextEditingController();
+    }
   }
 
   void loadExistingSelectedCommodities() {
@@ -83,6 +89,8 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
         .any((productNotifier) => productNotifier.product.quantity!.value > 0);
     setState(() {});
   }
+
+  final Map<String, TextEditingController> _costCTRController = {};
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +203,10 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                               .product
                                               .name),
                                           trailing: Text(
-                                              'Cantidad: ${addedProductsList[index].product.quantity!.value}'),
+                                            'Cantidad: ${addedProductsList[index].product.quantity!.value}',
+                                            style:
+                                                const TextStyle(fontSize: 18),
+                                          ),
                                         );
                                       },
                                     ),
@@ -233,9 +244,7 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                                 (p) =>
                                                     p.product.id == product.id,
                                                 orElse: () => productNotifier);
-                                        var quantityText = addedProduct
-                                                    .product.quantity!.value >
-                                                0
+                                        addedProduct.product.quantity!.value > 0
                                             ? addedProduct
                                                 .product.quantity!.value
                                                 .toString()
@@ -264,7 +273,7 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                                       if (addedProduct
                                                               .product
                                                               .quantity!
-                                                              .value ==
+                                                              .value <=
                                                           0) {
                                                         addedProducts.value
                                                             .removeWhere((p) =>
@@ -287,21 +296,69 @@ class _ChooseComponentScreenState extends State<ChooseComponentScreen> {
                                                                     235,
                                                                     235,
                                                                     235)),
-                                                    height: 30,
-                                                    width: 30,
-                                                    child: Center(
-                                                      child: Text(
-                                                        quantityText,
-                                                        style: const TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 16),
+                                                    height: 50,
+                                                    width: 55,
+                                                    child: Container(
+                                                      decoration:
+                                                          const BoxDecoration(
+                                                        color: Color.fromARGB(
+                                                            255, 235, 235, 235),
+                                                      ),
+                                                      child: Center(
+                                                        child: TextField(
+                                                          decoration: const InputDecoration(
+                                                              contentPadding:
+                                                                  EdgeInsets.only(
+                                                                      left: 8.0,
+                                                                      bottom:
+                                                                          8.0,
+                                                                      top:
+                                                                          8.0)),
+                                                          style:
+                                                              const TextStyle(
+                                                                  fontSize: 20),
+                                                          keyboardType:
+                                                              const TextInputType
+                                                                  .numberWithOptions(
+                                                                  decimal:
+                                                                      true),
+                                                          controller:
+                                                              _costCTRController[
+                                                                  product.id!
+                                                                      .toString()],
+                                                          onChanged: (value) {
+                                                            // Aquí puedes parsear el valor a double si es necesario
+                                                            double?
+                                                                parsedValue =
+                                                                double.tryParse(
+                                                                    value);
+                                                            if (parsedValue !=
+                                                                null) {
+                                                              addedProduct
+                                                                  .setQuantity(
+                                                                      parsedValue);
+                                                            }
+                                                          },
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
                                                   IconButton(
                                                     onPressed: () {
-                                                      addedProduct.increment();
+                                                      double? quantity =
+                                                          double.tryParse(
+                                                              _costCTRController[
+                                                                      product.id
+                                                                          .toString()]!
+                                                                  .text);
+                                                      if (quantity != null) {
+                                                        addedProduct
+                                                            .setQuantity(
+                                                                quantity);
+                                                      } else {
+                                                        addedProduct
+                                                            .increment();
+                                                      }
                                                       if (!addedProducts.value
                                                           .any((p) =>
                                                               p.product.id ==

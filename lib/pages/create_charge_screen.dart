@@ -3,6 +3,7 @@ import 'package:contabilidad/models/order_model.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 class AgregarCobroPage extends StatefulWidget {
   const AgregarCobroPage({super.key});
@@ -83,11 +84,11 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.done) {
                     if (snapshot.hasData) {
-                      List<OrderModel> filteredOrderList = snapshot.data!
-                          .where((order) =>
-                              order.status == "pendiente" &&
-                              double.parse(order.totalOwned) > 0.0)
-                          .toList();
+                      List<OrderModel> filteredOrderList =
+                          snapshot.data!.where((order) {
+                        return order.status == "pendiente" &&
+                            double.parse(order.totalOwned) > 0.0;
+                      }).toList();
 
                       return ValueListenableBuilder<int?>(
                         valueListenable: selectedOrderIndex,
@@ -186,15 +187,36 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                   width: double.infinity,
                   height: 60,
                   child: ElevatedButton(
-                    onPressed: _conceptoController.text.isNotEmpty
+                    onPressed: _conceptoController.text.isNotEmpty &&
+                                _montoController.text.isNotEmpty ||
+                            value != null && _montoController.text.isNotEmpty
                         ? () async {
                             if (value != null &&
                                 _montoController.text.isNotEmpty) {
+                              if (_montoController.text == "0") {
+                                final snackBar = SnackBar(
+                                  content: const Text(
+                                      'No puedes hacer un pago en 0.'),
+                                  action: SnackBarAction(
+                                    label: 'Deshacer',
+                                    onPressed: () {
+                                      // Lógica al hacer clic en 'Deshacer'
+                                    },
+                                  ),
+                                );
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(snackBar);
+
+                                return;
+                              }
+
                               double paymentAmount =
                                   double.parse(_montoController.text);
-
+                              const uuid = Uuid();
+                              final uid = uuid.v4();
                               // Crear un nuevo pago solo si se seleccionó una orden
                               PagoModel newPago = PagoModel(
+                                id: uid,
                                 date: DateFormat('MM/dd/yyyy')
                                     .format(DateTime.now()),
                                 amount: paymentAmount,
@@ -233,12 +255,14 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                       "COBRO ${cobroOrder.pagos.length} ${cobroOrder.orderId}",
                                   pagos: [],
                                   totalOwned: "",
-                                  margen: "",
+                                  margen: "test",
                                   status: "Pago",
                                   clientName: _conceptoController.text,
                                   celNumber: "",
                                   direccion: "",
-                                  date: DateTime.now().toString(),
+                                  date: DateFormat('MM/dd/yyyy')
+                                      .format(DateTime.now())
+                                      .toString(),
                                   comment: "",
                                   totalCost:
                                       double.tryParse(_montoController.text) ??
@@ -259,7 +283,9 @@ class _AgregarCobroPageState extends State<AgregarCobroPage> {
                                   clientName: _conceptoController.text,
                                   celNumber: "",
                                   direccion: "",
-                                  date: DateTime.now().toString(),
+                                  date: DateFormat('MM/dd/yyyy')
+                                      .format(DateTime.now())
+                                      .toString(),
                                   comment: "",
                                   totalCost:
                                       double.tryParse(_montoController.text) ??
