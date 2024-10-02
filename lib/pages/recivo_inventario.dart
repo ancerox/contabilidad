@@ -338,6 +338,10 @@ class _ReceiptPageState extends State<ReceiptPage> {
     List<ProductModel> productsForOrder = [];
 
     for (var product in consolidatedProducts) {
+//update cost
+      product.quantity = ValueNotifier(0);
+      await dataBase.updateProduct(product);
+
       // Preserve the original quantity for order creation
       productsForOrder.add(
           product.copyWith(quantity: ValueNotifier(product.quantity!.value)));
@@ -351,8 +355,8 @@ class _ReceiptPageState extends State<ReceiptPage> {
 
         // Reset quantity to 0 after updating the amount
         double quantityUsed = product.quantity!.value;
-        product.quantity = ValueNotifier(0);
-        await dataBase.updateProduct(product);
+        // product.quantity = ValueNotifier(0);
+        // await dataBase.updateProduct(product);
 
         if (product.subProduct != null && product.subProduct!.isNotEmpty) {
           for (var subProduct in product.subProduct!) {

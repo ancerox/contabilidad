@@ -166,12 +166,25 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                     ValueListenableBuilder<String>(
                       valueListenable: _searchTextNotifier,
                       builder: (context, value, _) {
-                        List<ProductModel> filteredProducts =
-                            products.where((product) {
-                          return product.name
-                              .toLowerCase()
-                              .contains(value.toLowerCase());
-                        }).toList();
+                        List<ProductModel> filteredProducts = [];
+                        if (widget.isEditPage) {
+                          filteredProducts = dataBaseProvider
+                              .selectedProductsNotifier.value
+                              .where((product) {
+                            return product.name
+                                .toLowerCase()
+                                .contains(value.toLowerCase());
+                          }).toList();
+                        }
+
+                        if (widget.isEditPage == false) {
+                          filteredProducts = products.where((product) {
+                            return product.name
+                                .toLowerCase()
+                                .contains(value.toLowerCase());
+                          }).toList();
+                        }
+
                         List<ProductModel> listOfProductsSave =
                             products.where((product) {
                           return product.name
@@ -182,6 +195,7 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                             .where((product) =>
                                 product.productCategory == "En alquiler")
                             .toList();
+
                         listOfProductsSave = listOfProductsSave
                             .where((product) =>
                                 product.productCategory == "En alquiler")
@@ -210,19 +224,12 @@ class _AlquilerWidgetState extends State<AlquilerWidget> {
                             SizedBox(
                               height: 100,
                               child: ListView.builder(
-                                itemCount: widget.isEditPage
-                                    ? dataBaseProvider
-                                        .selectedProductsNotifier.value.length
-                                    : filteredProducts.length,
+                                itemCount: filteredProducts.length,
                                 itemBuilder: (context, index) {
                                   const uuid = Uuid();
+
                                   ProductModel product =
                                       filteredProducts[index];
-
-                                  if (widget.isEditPage == true) {
-                                    product = dataBaseProvider
-                                        .selectedProductsNotifier.value[index];
-                                  }
 
                                   bool isSelected = dataBaseProvider
                                       .selectedProductsNotifier.value

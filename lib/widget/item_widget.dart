@@ -172,7 +172,7 @@ class _ItemState extends State<Item> {
                                                         inputFormatters: <TextInputFormatter>[
                                                           FilteringTextInputFormatter
                                                               .allow(RegExp(
-                                                                  r'^\d*\.?\d*')),
+                                                                  r'^\d*\.?\d*')), // Allow numbers and a single decimal point
                                                         ],
                                                         style: TextStyle(
                                                             overflow:
@@ -302,7 +302,7 @@ class _ItemState extends State<Item> {
                       // vertical: screenHeight * 0.01,
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: widget.quantityCTRController == null
                           ? CrossAxisAlignment.start
                           : CrossAxisAlignment.center,
@@ -310,18 +310,77 @@ class _ItemState extends State<Item> {
                         Column(
                           children: [
                             widget.imagePath == "none"
-                                ? Container(
-                                    height: screenHeight * 0.07,
-                                    width: screenHeight * 0.07,
-                                    decoration: BoxDecoration(
-                                        image: const DecorationImage(
-                                          scale: 17.0,
-                                          image: AssetImage(
-                                              "assets/icons/icon.jpeg"),
-                                        ),
-                                        color: const Color(0xffD8DFFF),
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
+                                ? Row(
+                                    children: [
+                                      Container(
+                                        height: screenHeight * 0.07,
+                                        width: screenHeight * 0.07,
+                                        decoration: BoxDecoration(
+                                            image: const DecorationImage(
+                                              scale: 17.0,
+                                              image: AssetImage(
+                                                  "assets/icons/icon.jpeg"),
+                                            ),
+                                            color: const Color(0xffD8DFFF),
+                                            borderRadius:
+                                                BorderRadius.circular(10)),
+                                      ),
+                                      const SizedBox(
+                                        width: 10,
+                                      ),
+                                      widget.subProducts == null
+                                          ? Container()
+                                          : widget.subProducts!.isEmpty
+                                              ? Container()
+                                              : GestureDetector(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      isDetailedPressed =
+                                                          !isDetailedPressed;
+                                                    });
+                                                  },
+                                                  child: Container(
+                                                    height: screenHeight * 0.07,
+                                                    width: screenWidth * 0.15,
+                                                    decoration: BoxDecoration(
+                                                      color: isDetailedPressed
+                                                          ? const Color
+                                                              .fromARGB(255,
+                                                              255, 255, 255)
+                                                          : const Color
+                                                              .fromARGB(255,
+                                                              215, 53, 255),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              5),
+                                                    ),
+                                                    child: Center(
+                                                      child: Text(
+                                                        'Detalles',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color:
+                                                              isDetailedPressed
+                                                                  ? const Color
+                                                                      .fromARGB(
+                                                                      255,
+                                                                      0,
+                                                                      0,
+                                                                      0)
+                                                                  : const Color
+                                                                      .fromARGB(
+                                                                      255,
+                                                                      255,
+                                                                      255,
+                                                                      255),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                    ],
                                   )
                                 : Container(
                                     height: screenHeight * 0.07,
@@ -339,39 +398,6 @@ class _ItemState extends State<Item> {
                             SizedBox(
                               height: screenHeight * 0.01,
                             ),
-                            widget.subProducts == null
-                                ? Container()
-                                : widget.subProducts!.isEmpty
-                                    ? Container()
-                                    : GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            isDetailedPressed =
-                                                !isDetailedPressed;
-                                          });
-                                        },
-                                        child: Container(
-                                          height: screenHeight * 0.03,
-                                          width: screenWidth * 0.15,
-                                          decoration: BoxDecoration(
-                                            color: isDetailedPressed
-                                                ? const Color.fromARGB(
-                                                    255, 255, 255, 255)
-                                                : const Color.fromARGB(
-                                                    255, 215, 53, 255),
-                                            borderRadius:
-                                                BorderRadius.circular(5),
-                                          ),
-                                          child: const Center(
-                                            child: Text(
-                                              'Detalles',
-                                              style: TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w500),
-                                            ),
-                                          ),
-                                        ),
-                                      )
                           ],
                         ),
                         SizedBox(
@@ -379,7 +405,7 @@ class _ItemState extends State<Item> {
                         ),
                         widget.hasTrailing == true
                             ? Container(
-                                width: screenWidth * 0.6,
+                                width: screenWidth * 0.45,
                                 decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(20),
                                     color: const Color.fromARGB(
@@ -465,18 +491,25 @@ class _ItemState extends State<Item> {
                                 ),
                               )
                             : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  Text(
-                                    widget.amount.toString(),
-                                    style: subtitles.copyWith(
-                                        color: Colors.black,
-                                        fontSize: screenHeight * 0.018),
-                                  ),
-                                  Text("Artículos",
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 10),
+                                    child: Text(
+                                      widget.amount.toString(),
                                       style: subtitles.copyWith(
                                           color: Colors.black,
-                                          fontSize: screenHeight * 0.018)),
+                                          fontSize: screenHeight * 0.022),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 0),
+                                    child: Text("Artículos",
+                                        style: subtitles.copyWith(
+                                            color: Colors.black,
+                                            fontSize: screenHeight * 0.018)),
+                                  ),
                                 ],
                               ),
                       ],
@@ -508,7 +541,7 @@ class _ItemState extends State<Item> {
                                     const SizedBox(width: 10),
                                     const SizedBox(width: 40),
                                     Text(
-                                      "${subProduct.cost * subProduct.quantity!.value}\$",
+                                      "\$${subProduct.cost * subProduct.quantity!.value}",
                                       style: TextStyle(
                                         overflow: TextOverflow.ellipsis,
                                         fontSize: screenHeight * 0.018,

@@ -56,6 +56,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final TextEditingController _commnetController = TextEditingController();
   final TextEditingController _totalController = TextEditingController();
   final TextEditingController _paymentDateController = TextEditingController();
+  final Map<String, ValueNotifier<int>> productUnitPrices = {};
+
   final TextEditingController _paymentAmountController =
       TextEditingController();
   Map<int, List<DateRange>> productDateRanges = {};
@@ -349,6 +351,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     dataBaseProvider = Provider.of<DataBase>(context, listen: false);
     for (int i = 0; i < products.value.length; i++) {
       _unitPriceControllers[i] = TextEditingController();
+    }
+    for (var product in products.value) {
+      productUnitPrices[product.id.toString()] =
+          ValueNotifier<int>(product.cost.toInt());
     }
     getOrderCount();
     _dateController.text = DateFormat('MM/dd/yyyy').format(DateTime.now());
@@ -1138,6 +1144,14 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                   _unitPriceControllers[
                                                           product.id] ??
                                                       TextEditingController();
+                                              if (!productUnitPrices
+                                                  .containsKey(
+                                                      product.id.toString())) {
+                                                productUnitPrices[
+                                                        product.id.toString()] =
+                                                    ValueNotifier<int>(
+                                                        product.cost.toInt());
+                                              }
                                               final controller =
                                                   _getOrCreateController(
                                                       product.id.toString());
@@ -1156,77 +1170,116 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                                       quantity;
 
                                               unitPriceControllers.text =
-                                                  totalPrice.toString();
+                                                  product.unitPrice.toString();
 
-                                              return Item(
-                                                subProducts: product.subProduct,
-                                                costOnChange: (String value) {
-                                                  if (value != "") {
-                                                    product.cost =
-                                                        double.parse(value);
-                                                    _calculateTotalPrice();
-                                                  }
-                                                },
-                                                onFieldSubmitted:
-                                                    (String value) {
-                                                  setState(() {});
-                                                },
-                                                cost: totalcost.toInt(),
-                                                imagePath: product.file!,
-                                                name: product.name,
-                                                precio: product.unitPrice,
-                                                quantityOnChange:
-                                                    (String value) {
-                                                  if (value == "") {
-                                                    return;
-                                                  }
-                                                  product.quantity!.value =
-                                                      double.parse(value);
-                                                  _updateCheckoutButtonState();
-                                                  _updateSelectedProductQuantity(
-                                                      product,
-                                                      int.parse(
-                                                          controller.text),
-                                                      true);
-                                                  totalOwned =
-                                                      totalquantity.toInt() -
+                                              return ValueListenableBuilder<
+                                                  int>(
+                                                valueListenable:
+                                                    productUnitPrices[
+                                                        product.id.toString()]!,
+                                                builder: (context, unitPrices,
+                                                    child) {
+                                                  return Item(
+                                                    unitPriceOnChange:
+                                                        (String value) {
+                                                      // value = value.replaceAll(
+                                                      //     RegExp(r'[^0-9.]'), '');
+
+                                                      if (value.isNotEmpty &&
+                                                          double.tryParse(
+                                                                  value) !=
+                                                              null) {
+                                                        productUnitPrices[product
+                                                                    .id
+                                                                    .toString()]!
+                                                                .value =
+                                                            int.parse(value);
+                                                        product.unitPrice =
+                                                            double.parse(value);
+                                                        // product.unitPrice =
+                                                        //     double.parse(value);
+                                                      }
+                                                      // else {
+                                                      //   print(
+                                                      //       'Invalid number format: $value');
+                                                      // }
+                                                    },
+                                                    subProducts:
+                                                        product.subProduct,
+                                                    costOnChange:
+                                                        (String value) {
+                                                      if (value != "") {
+                                                        product.cost =
+                                                            double.parse(value);
+                                                        _calculateTotalPrice();
+                                                      }
+                                                    },
+                                                    onFieldSubmitted:
+                                                        (String value) {
+                                                      setState(() {});
+                                                    },
+                                                    cost: totalcost.toInt(),
+                                                    imagePath: product.file!,
+                                                    name: product.name,
+                                                    precio: productUnitPrices[
+                                                            product.id
+                                                                .toString()]!
+                                                        .value
+                                                        .toDouble(),
+                                                    quantityOnChange:
+                                                        (String value) {
+                                                      if (value == "") {
+                                                        return;
+                                                      }
+                                                      product.quantity!.value =
+                                                          double.parse(value);
+                                                      _updateCheckoutButtonState();
+                                                      _updateSelectedProductQuantity(
+                                                          product,
+                                                          int.parse(
+                                                              controller.text),
+                                                          true);
+                                                      totalOwned = totalquantity
+                                                              .toInt() -
                                                           grantTotalOwned;
-                                                  _calculateTotalPrice();
-                                                  setState(() {});
-                                                },
-                                                plus: () {
-                                                  product.quantity!.value++;
-                                                  _updateCheckoutButtonState();
-                                                  _updateSelectedProductQuantity(
-                                                      product, 1, false);
-                                                  _calculateTotalPrice();
-                                                  setState(() {});
-                                                },
-                                                minus: () {
-                                                  // if (product.quantity!.value ==
-                                                  //     1) {
-                                                  //   setState(() {
-                                                  //     selectedProducts
-                                                  //         .remove(product);
-                                                  //     _calculateTotalPrice();
-                                                  //   });
-                                                  //   return;
-                                                  // }
+                                                      _calculateTotalPrice();
+                                                      setState(() {});
+                                                    },
+                                                    plus: () {
+                                                      product.quantity!.value++;
+                                                      _updateCheckoutButtonState();
+                                                      _updateSelectedProductQuantity(
+                                                          product, 1, false);
+                                                      _calculateTotalPrice();
+                                                      setState(() {});
+                                                    },
+                                                    minus: () {
+                                                      // if (product.quantity!.value ==
+                                                      //     1) {
+                                                      //   setState(() {
+                                                      //     selectedProducts
+                                                      //         .remove(product);
+                                                      //     _calculateTotalPrice();
+                                                      //   });
+                                                      //   return;
+                                                      // }
 
-                                                  product.quantity!.value--;
-                                                  _updateCheckoutButtonState();
-                                                  _updateSelectedProductQuantity(
-                                                      product, -1, false);
-                                                  _calculateTotalPrice();
-                                                  setState(() {});
+                                                      product.quantity!.value--;
+                                                      _updateCheckoutButtonState();
+                                                      _updateSelectedProductQuantity(
+                                                          product, -1, false);
+                                                      _calculateTotalPrice();
+                                                      setState(() {});
+                                                    },
+                                                    hasTrailing: true,
+                                                    quantity: product.quantity!,
+                                                    quantityCTRController:
+                                                        controller,
+                                                    magnitud: product.unit,
+                                                    unitPriceCTRController:
+                                                        unitPriceControllers,
+                                                  );
                                                 },
-                                                hasTrailing: true,
-                                                quantity: product.quantity!,
-                                                quantityCTRController:
-                                                    controller,
-                                                magnitud: product.unit,
-                                                unitPriceCTRController:
-                                                    unitPriceControllers,
                                               );
                                             },
                                           ),

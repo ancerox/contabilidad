@@ -259,14 +259,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           builder: (context, costValue, child) {
                             return Item(
                               subProducts: product.subProduct,
-                              costOnChange: (String value) {
-                                if (value.isNotEmpty) {
-                                  productCosts[productId]!.value =
-                                      int.parse(value);
+                              costOnChange: (value) {
+                                // Clean the value and make sure it's valid before parsing
+                                value =
+                                    value.replaceAll(RegExp(r'[^0-9.]'), '');
 
-                                  //
-                                  product.cost =
-                                      productCosts[productId]!.value.toDouble();
+                                if (value.isNotEmpty &&
+                                    double.tryParse(value) != null) {
+                                  productCosts[productId]!.value =
+                                      double.parse(value).toInt();
+                                  product.cost = double.parse(value);
+                                } else {
+                                  print('Invalid number format: $value');
                                 }
                               },
                               quantityOnChange: (String value) {

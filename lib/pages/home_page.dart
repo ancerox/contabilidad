@@ -34,6 +34,7 @@ class _HomePageState extends State<HomePage> {
 
   final List<DateTime> ventasDatesOrders = [];
   final List<double> totalVentasList = [];
+  bool isvalue6digit = false;
 
   @override
   void initState() {
@@ -244,12 +245,12 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 15),
+                      const SizedBox(height: 5),
                       Text(
-                        'Estadísticas',
+                        'Resumen Financiero',
                         style: subtitles.copyWith(color: Colors.black),
                       ),
-                      const SizedBox(height: 15),
+                      const SizedBox(height: 10),
                       TextButton(
                         onPressed: () async {
                           final pickedDateRange = await showDateRangePicker(
@@ -287,7 +288,6 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 15),
                       FutureBuilder<Map<String, double>>(
                         future: totalesFuture,
                         builder: (context, snapshot) {
@@ -315,61 +315,53 @@ class _HomePageState extends State<HomePage> {
                             final double totalGastos = totals['gastos'] ?? 0.0;
 
                             return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 // Statistics Section
-                                Center(
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Column(
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceEvenly,
-                                          children: [
-                                            Statistics(
-                                              color: 0xff9C4CFD,
-                                              text:
-                                                  'Ventas \n\$${totalVentas.toStringAsFixed(2)}',
-                                              percentage: totalVentas > 0
-                                                  ? (totalVentas / 1000)
-                                                      .clamp(0.0, 1.0)
-                                                  : 0.0,
-                                            ),
-                                            Statistics(
-                                              color: 0xff0EB200,
-                                              text:
-                                                  'Efectivo \n\$${totalGanancias.toStringAsFixed(2)}',
-                                              percentage: totalGanancias > 0
-                                                  ? (totalGanancias / 500)
-                                                      .clamp(0.0, 1.0)
-                                                  : 0.0,
-                                            ),
-                                            Statistics(
-                                              color: 0xffF85819,
-                                              text:
-                                                  'Gastos \n\$${totalGastos.toStringAsFixed(2)}',
-                                              percentage: totalGastos > 0
-                                                  ? (totalGastos / 800)
-                                                      .clamp(0.0, 1.0)
-                                                  : 0.0,
-                                            ),
-                                            Statistics(
-                                              color: 0xffF85819,
-                                              text:
-                                                  'Costo \nordenes \n\$${totalCosto.toStringAsFixed(2)}',
-                                              percentage: totalCosto > 0
-                                                  ? (totalCosto / 800)
-                                                      .clamp(0.0, 1.0)
-                                                  : 0.0,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(
-                                          height: 20,
-                                        ),
-                                      ],
-                                    ),
+                                SingleChildScrollView(
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Statistics(
+                                            icon:
+                                                const Icon(Icons.attach_money),
+                                            color: 0xff4CAF50,
+                                            text: 'Ventas',
+                                            percentage: totalVentas,
+                                          ),
+                                          Statistics(
+                                            icon: const Icon(Icons.money_off),
+                                            color: 0xff9C4CFD,
+                                            text: 'Efectivo',
+                                            percentage: totalGanancias,
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Statistics(
+                                            icon: const Icon(Icons.money),
+                                            color: 0xffF85819,
+                                            text: 'Gastos',
+                                            percentage: totalGastos,
+                                          ),
+                                          Statistics(
+                                              icon: const Icon(
+                                                  Icons.shopping_cart),
+                                              color: 0xffFFEA00,
+                                              text: 'Costo ordenes',
+                                              percentage: totalCosto),
+                                        ],
+                                      ),
+                                      const SizedBox(
+                                        height: 20,
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(height: 20),
@@ -424,6 +416,12 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  String formatNumberWithCommas(double number) {
+    final formatter =
+        NumberFormat('#,##0'); // Add commas and keep 2 decimal places
+    return formatter.format(number);
   }
 
   /// Builds the Line Chart using fl_chart package
@@ -556,15 +554,18 @@ class _HomePageState extends State<HomePage> {
               showTitles: true,
               interval: (maxY - minY) / 5,
               getTitlesWidget: (value, meta) {
+                isvalue6digit = value.toString().length > 5 ? true : false;
+                // setState(() {});
                 return Text(
-                  '\$${value.toInt()}',
+                  "\$ ${formatNumberWithCommas(value)}",
                   style: const TextStyle(
                     color: Colors.black,
+                    fontWeight: FontWeight.w500,
                     fontSize: 10,
                   ),
                 );
               },
-              reservedSize: 40,
+              reservedSize: 65,
             ),
           ),
           topTitles: const AxisTitles(
@@ -580,11 +581,12 @@ class _HomePageState extends State<HomePage> {
         ),
         lineBarsData: [
           LineChartBarData(
+            preventCurveOverShooting: true,
             spots: spots,
             isCurved: true,
             gradient: const LinearGradient(
               colors: [
-                Color.fromARGB(255, 224, 13, 231),
+                Color(0xff4CAF50),
                 Color(0xff81C784),
               ],
               begin: Alignment.centerLeft,
@@ -599,7 +601,7 @@ class _HomePageState extends State<HomePage> {
               show: true,
               gradient: LinearGradient(
                 colors: [
-                  Colors.green.withOpacity(0.9),
+                  Colors.green.withOpacity(0.3),
                   Colors.green.withOpacity(0.0),
                 ],
                 begin: Alignment.topCenter,
@@ -815,6 +817,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 class Statistics extends StatelessWidget {
+  final Widget icon;
   final String text;
   final int color;
   final double percentage;
@@ -823,61 +826,99 @@ class Statistics extends StatelessWidget {
     required this.color,
     required this.text,
     required this.percentage,
+    required this.icon,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 170,
-      width: MediaQuery.of(context).size.width *
-          0.2, // Adjusted width for better layout
-      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+      height: 130,
+      width: MediaQuery.of(context).size.width / 2.4, // Adjusted width
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(35),
-        border: Border.all(width: 1.5, color: const Color(0xffD0A6FA)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(
+              0.07,
+            ),
+            offset: const Offset(0, 0),
+            blurRadius: 5,
+          )
+        ],
+        // gradient: LinearGradient(
+        //   begin: Alignment.topLeft,
+        //   end: Alignment.bottomRight,
+        //   colors: [
+        //     const Color.fromARGB(255, 255, 255, 255).withOpacity(0.5),
+        //     const Color.fromARGB(255, 255, 255, 255).withOpacity(0.8),
+        //     const Color.fromARGB(255, 255, 255, 255).withOpacity(0.9),
+        //   ],
+        //   stops: const [0, 100, 100],
+        // ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
       ),
+
       child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  height: 60,
-                  width: 60,
-                  child: CircularProgressIndicator(
-                    value: percentage,
-                    strokeWidth: 6,
-                    backgroundColor: Colors.grey[200],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(color),
-                    ),
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 0),
+        child: CustomPaint(
+          painter: GradientPainter(padding: -5, widthPadding: -0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.black,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const Text(
-                  '\$',
-                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            FittedBox(
-              child: Text(
-                text,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.black,
-                ),
               ),
-            ),
-          ],
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    height: 60,
+                    width: 60,
+                    child: CircularProgressIndicator(
+                      value: 100,
+                      strokeWidth: 6,
+                      backgroundColor: Colors.grey[200],
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(color),
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    '\$',
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 20),
+                  ),
+                ],
+              ),
+              Text(
+                "\$${formatNumberWithCommas(percentage)}", // Format the percentage with commas
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.end, // Align the text to the right
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String formatNumberWithCommas(double number) {
+    final formatter =
+        NumberFormat('#,##0'); // Add commas and keep 2 decimal places
+    return formatter.format(number);
   }
 }
 
@@ -983,5 +1024,69 @@ class CardWidget extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class GradientPainter extends CustomPainter {
+  final double padding; // Padding for the height
+  final double widthPadding; // New parameter for padding the width
+
+  GradientPainter({
+    this.padding = 0,
+    this.widthPadding = 0,
+  }); // Padding for height and width as parameters
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Reduce width and height by the respective padding values
+    final double paddedWidth = size.width - widthPadding * 2;
+    final double paddedHeight = size.height - padding * 2;
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.025) // Black with 25% opacity
+      ..maskFilter =
+          const MaskFilter.blur(BlurStyle.normal, 4); // Blur radius of 4
+
+    // Define the rectangle and rounded rectangle for the shadow
+    final startShadow = Offset(widthPadding, padding);
+    final endShadow =
+        Offset(paddedWidth + widthPadding, paddedHeight + padding);
+    final rectShadow = Rect.fromPoints(startShadow, endShadow);
+    final rRectShadow = RRect.fromRectAndRadius(
+        rectShadow
+            .shift(const Offset(0, 4)), // Offset Y by 4 to create shadow effect
+        const Radius.circular(20));
+
+    // Draw the shadow
+    canvas.drawRRect(rRectShadow, shadowPaint);
+
+    // Create the gradient for the stroke
+    final gradient = LinearGradient(
+      colors: [
+        Colors.black,
+        const Color.fromARGB(255, 8, 74, 74).withOpacity(0.7),
+        const Color(0xff111919),
+      ],
+      begin: Alignment.centerLeft, // Start at center left
+      end: Alignment.centerRight, // End at center right
+    );
+
+    final start = Offset(widthPadding, padding);
+    final end = Offset(paddedWidth + widthPadding, paddedHeight + padding);
+    final rect = Rect.fromPoints(start, end);
+    final rRect = RRect.fromRectAndRadius(rect, const Radius.circular(20));
+
+    final paint = Paint()
+      ..strokeWidth = 0.01
+      ..style = PaintingStyle.stroke
+      ..shader = gradient.createShader(rect);
+
+    // Draw the gradient stroke
+    canvas.drawRRect(rRect, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false; // Adjust as needed if you plan to update the drawing
   }
 }
